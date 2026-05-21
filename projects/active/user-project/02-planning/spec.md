@@ -1,268 +1,374 @@
-# Technical Architecture & API Contract — Web QuickPay MVP
+# Technical Architecture & API Contract — MVP Bán Hàng Trực Tuyến
 
-**Project folder:** `projects/active/quickpay/`  
-**Recommended spec file:** `projects/active/quickpay/02-planning/spec.md`  
-**Stack:** React + Express + SQLite + JWT  
-**Initial wallet balance:** `1,000,000 VND`, stored as integer `1000000`
+> Do chưa có `project-name/project path`, tài liệu này chưa được ghi file. Khi có path, đề xuất lưu tại:  
+> `projects/active/[project-name]/02-planning/api-contract.md`
 
 ---
 
-# 1. Architecture Overview
+## 1. Quyết định kỹ thuật mặc định cho MVP
 
-## 1.1. System Components
-
-```txt
-React Frontend
-   |
-   | HTTPS/HTTP JSON API
-   v
-Express Backend API
-   |
-   | SQLite queries
-   v
-SQLite Database
-```
-
-## 1.2. Main Modules
-
-### Frontend
-
-- Authentication pages:
-  - Register
-  - Login
-- User pages:
-  - Dashboard
-  - Transfer money
-  - Generate QR
-  - Pay by QR payload
-  - Transaction history
-- Admin pages:
-  - Admin dashboard
-  - User list
-  - User detail
-  - Transaction list
-
-### Backend
-
-- Auth module
-- User module
-- Wallet module
-- Transaction module
-- QR/payment module
-- Admin module
-- JWT authentication middleware
-- Role-based authorization middleware
+| Hạng mục | Quyết định |
+|---|---|
+| Tiền tệ | VND |
+| Thanh toán | COD |
+| Tài khoản khách hàng | Không có trong MVP |
+| Giỏ hàng | Lưu client-side bằng `localStorage` |
+| Hình ảnh sản phẩm | Nhập URL ảnh |
+| Admin | Một hoặc nhiều tài khoản admin, seed sẵn tài khoản đầu tiên |
+| Product category | Không có trong MVP |
+| Email xác nhận | Không có trong MVP |
+| Tổng tiền đơn hàng | Backend tự tính, không tin client |
+| Trừ tồn kho | Khi tạo đơn hàng thành công |
+| Hủy đơn hàng | Nếu đơn đã trừ tồn kho, cộng lại tồn kho khi chuyển sang `CANCELLED` |
+| Auth admin | Session cookie hoặc JWT HttpOnly cookie. Khuyến nghị HttpOnly cookie cho MVP web app |
+| API format | REST JSON |
+| DateTime format | ISO 8601 UTC |
+| ID format | UUID string khuyến nghị, có thể thay bằng integer nếu stack yêu cầu |
 
 ---
 
-# 2. Core Business Rules
+## 2. Kiến trúc tổng quan
 
-## 2.1. User Registration
+```text
+Frontend Web App
+  ├─ Public pages
+  │   ├─ Product list
+  │   ├─ Product detail
+  │   ├─ Cart - localStorage
+  │   ├─ Checkout
+  │   └─ Order success
+  │
+  └─ Admin pages
+      ├─ Login
+      ├─ Product management
+      └─ Order management
 
-When a user registers:
+Backend API
+  ├─ Public Product API
+  ├─ Public Order API
+  ├─ Admin Auth API
+  ├─ Admin Product API
+  └─ Admin Order API
 
-1. Create user with role `USER`.
-2. Hash password with bcrypt.
-3. Create default wallet.
-4. Set wallet balance to `1000000`.
-5. Generate unique wallet code.
-
-## 2.2. Wallet Balance
-
-- Balance is stored as integer VND.
-- Balance must never be negative.
-- Every successful transfer updates two wallets:
-  - Sender balance decreases.
-  - Receiver balance increases.
-- Failed transfers must not mutate wallet balances.
-
-## 2.3. Transfer Rules
-
-A transfer is rejected if:
-
-- Sender is same as receiver.
-- Amount is less than or equal to `0`.
-- Sender balance is insufficient.
-- Receiver cannot be found.
-- Receiver wallet is inactive or missing.
-
-## 2.4. QR Payment MVP
-
-QR payload is a JSON string encoded as QR.
-
-Example payload:
-
-```json
-{
-  "type": "QUICKPAY_QR",
-  "receiverWalletCode": "QP123456789",
-  "amount": 50000,
-  "note": "Lunch payment"
-}
-```
-
-For MVP:
-
-- Backend generates the QR payload.
-- Frontend may render QR image using a QR library.
-- User can paste QR payload manually to pay.
-- Camera scanning is optional and out of MVP scope.
-
----
-
-# 3. Roles
-
-```txt
-USER
-ADMIN
-```
-
-## 3.1. USER Permissions
-
-- Register/login.
-- View own profile.
-- View own wallet.
-- View own dashboard.
-- Transfer money.
-- Generate QR receive payload.
-- Pay by QR payload.
-- View own transaction history.
-
-## 3.2. ADMIN Permissions
-
-- Login.
-- View admin dashboard.
-- View all users.
-- View user detail.
-- View all transactions.
-- Search/filter users and transactions.
-
----
-
-# 4. Data Model
-
-## 4.1. Entity Relationship
-
-```txt
-users 1---1 wallets
-users 1---N transactions as sender
-users 1---N transactions as receiver
+Database
+  ├─ products
+  ├─ orders
+  ├─ order_items
+  └─ admin_users
 ```
 
 ---
 
-## 4.2. Table: `users`
+## 3. Quy ước API chung
 
-| Field | Type | Constraints | Description |
-|---|---|---|---|
-| `id` | INTEGER | PK, auto increment | User ID |
-| `full_name` | TEXT | NOT NULL | Full name |
-| `email` | TEXT | UNIQUE, NOT NULL | Login email |
-| `password_hash` | TEXT | NOT NULL | Bcrypt hash |
-| `role` | TEXT | NOT NULL, default `USER` | `USER` or `ADMIN` |
-| `status` | TEXT | NOT NULL, default `ACTIVE` | `ACTIVE`, `LOCKED` |
-| `created_at` | TEXT | NOT NULL | ISO datetime |
-| `updated_at` | TEXT | NOT NULL | ISO datetime |
+### 3.1 Base URL
 
----
-
-## 4.3. Table: `wallets`
-
-| Field | Type | Constraints | Description |
-|---|---|---|---|
-| `id` | INTEGER | PK, auto increment | Wallet ID |
-| `user_id` | INTEGER | FK users.id, UNIQUE, NOT NULL | Owner |
-| `wallet_code` | TEXT | UNIQUE, NOT NULL | Public receiver code |
-| `balance` | INTEGER | NOT NULL, default `1000000` | VND integer |
-| `status` | TEXT | NOT NULL, default `ACTIVE` | `ACTIVE`, `LOCKED` |
-| `created_at` | TEXT | NOT NULL | ISO datetime |
-| `updated_at` | TEXT | NOT NULL | ISO datetime |
-
----
-
-## 4.4. Table: `transactions`
-
-| Field | Type | Constraints | Description |
-|---|---|---|---|
-| `id` | INTEGER | PK, auto increment | Transaction ID |
-| `transaction_code` | TEXT | UNIQUE, NOT NULL | Public transaction code |
-| `sender_user_id` | INTEGER | FK users.id, NOT NULL | Sender |
-| `receiver_user_id` | INTEGER | FK users.id, NOT NULL | Receiver |
-| `sender_wallet_id` | INTEGER | FK wallets.id, NOT NULL | Sender wallet |
-| `receiver_wallet_id` | INTEGER | FK wallets.id, NOT NULL | Receiver wallet |
-| `amount` | INTEGER | NOT NULL | VND integer |
-| `note` | TEXT | Nullable | Transfer note |
-| `status` | TEXT | NOT NULL | `SUCCESS`, `FAILED` |
-| `failure_reason` | TEXT | Nullable | Failure reason |
-| `type` | TEXT | NOT NULL | `TRANSFER`, `QR_PAYMENT` |
-| `created_at` | TEXT | NOT NULL | ISO datetime |
-
----
-
-# 5. API Conventions
-
-## 5.1. Base URL
-
-```txt
+```text
 /api
 ```
 
-Example:
+### 3.2 Content Type
 
-```txt
-http://localhost:3000/api/auth/login
-```
-
----
-
-## 5.2. Auth Header
-
-Protected endpoints require:
+Request:
 
 ```http
-Authorization: Bearer <jwt_token>
+Content-Type: application/json
 ```
 
----
+Response:
 
-## 5.3. Standard Success Response
+```http
+Content-Type: application/json
+```
+
+### 3.3 Authentication
+
+Admin APIs yêu cầu đăng nhập.
+
+Khuyến nghị dùng HttpOnly cookie:
+
+```http
+Cookie: admin_session=...
+```
+
+Nếu dùng Bearer token thì:
+
+```http
+Authorization: Bearer <token>
+```
+
+Contract này ưu tiên cookie-based session để phù hợp website admin MVP.
+
+### 3.4 Response thành công chung
+
+Response trả trực tiếp resource hoặc object bao ngoài tùy endpoint.
+
+Ví dụ:
 
 ```json
 {
-  "success": true,
-  "data": {}
+  "id": "prd_123",
+  "name": "Áo thun basic"
 }
 ```
 
----
-
-## 5.4. Standard Error Response
+Với list:
 
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "Human readable message"
+  "items": [],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "totalItems": 100,
+    "totalPages": 5
   }
 }
 ```
 
+### 3.5 Error response chuẩn
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Dữ liệu không hợp lệ",
+    "details": [
+      {
+        "field": "customerName",
+        "message": "Vui lòng nhập họ tên"
+      }
+    ]
+  }
+}
+```
+
+### 3.6 HTTP status code chuẩn
+
+| Status | Ý nghĩa |
+|---:|---|
+| `200` | Thành công |
+| `201` | Tạo mới thành công |
+| `204` | Thành công, không có body |
+| `400` | Request không hợp lệ |
+| `401` | Chưa đăng nhập |
+| `403` | Không có quyền |
+| `404` | Không tìm thấy |
+| `409` | Conflict, ví dụ tồn kho không đủ hoặc trạng thái không hợp lệ |
+| `422` | Validation error |
+| `500` | Lỗi server |
+
+### 3.7 Error codes
+
+| Code | Ý nghĩa |
+|---|---|
+| `VALIDATION_ERROR` | Dữ liệu đầu vào không hợp lệ |
+| `UNAUTHENTICATED` | Chưa đăng nhập |
+| `FORBIDDEN` | Không có quyền |
+| `NOT_FOUND` | Không tìm thấy resource |
+| `INVALID_CREDENTIALS` | Sai email hoặc mật khẩu |
+| `INSUFFICIENT_STOCK` | Tồn kho không đủ |
+| `INVALID_ORDER_STATUS_TRANSITION` | Chuyển trạng thái đơn hàng không hợp lệ |
+| `PRODUCT_NOT_VISIBLE` | Sản phẩm không visible với public API |
+| `INTERNAL_ERROR` | Lỗi hệ thống |
+
 ---
 
-## 5.5. Common HTTP Status Codes
+## 4. Data Model
 
-| Status | Meaning |
+## 4.1 Product
+
+### Table: `products`
+
+| Field | Type | Required | Constraint |
+|---|---|---:|---|
+| `id` | string UUID | Yes | Primary key |
+| `name` | string | Yes | Not empty |
+| `description` | text nullable | No |  |
+| `price` | decimal/integer | Yes | `> 0` |
+| `imageUrl` | string nullable | No | URL string |
+| `stockQuantity` | integer | Yes | `>= 0` |
+| `isVisible` | boolean | Yes | Default `true` |
+| `createdAt` | datetime | Yes |  |
+| `updatedAt` | datetime | Yes |  |
+
+> Khuyến nghị lưu tiền VND bằng integer minor unit, ví dụ `price = 150000`, tránh lỗi floating point.
+
+### Product API shape
+
+```json
+{
+  "id": "prd_123",
+  "name": "Áo thun basic",
+  "description": "Áo thun cotton",
+  "price": 150000,
+  "imageUrl": "https://example.com/image.jpg",
+  "stockQuantity": 10,
+  "isVisible": true,
+  "stockStatus": "IN_STOCK",
+  "createdAt": "2026-05-21T10:00:00.000Z",
+  "updatedAt": "2026-05-21T10:00:00.000Z"
+}
+```
+
+`stockStatus` là computed field:
+
+```text
+IN_STOCK | OUT_OF_STOCK
+```
+
+---
+
+## 4.2 Order
+
+### Table: `orders`
+
+| Field | Type | Required | Constraint |
+|---|---|---:|---|
+| `id` | string UUID | Yes | Primary key |
+| `customerName` | string | Yes | Not empty |
+| `customerPhone` | string | Yes | Valid phone |
+| `customerEmail` | string nullable | No | Valid email nếu có |
+| `shippingAddress` | text | Yes | Not empty |
+| `note` | text nullable | No |  |
+| `totalAmount` | integer/decimal | Yes | Backend calculated |
+| `status` | enum | Yes | Default `NEW` |
+| `paymentMethod` | enum | Yes | `COD` |
+| `stockRestoredAt` | datetime nullable | No | Set khi hủy đơn và đã hoàn tồn kho |
+| `createdAt` | datetime | Yes |  |
+| `updatedAt` | datetime | Yes |  |
+
+### Order status enum
+
+Internal values:
+
+```text
+NEW
+PROCESSING
+SHIPPING
+COMPLETED
+CANCELLED
+```
+
+Display labels:
+
+| Internal | Display |
 |---|---|
-| `200` | OK |
-| `201` | Created |
-| `400` | Bad request or validation error |
-| `401` | Unauthorized or invalid token |
-| `403` | Forbidden |
-| `404` | Resource not found |
-| `409` | Conflict, e.g. duplicated email |
-| `422` | Business rule violation |
-| `500` | Internal server error |
+| `NEW` | Mới |
+| `PROCESSING` | Đang xử lý |
+| `SHIPPING` | Đang giao |
+| `COMPLETED` | Hoàn tất |
+| `CANCELLED` | Đã hủy |
+
+### Payment method enum
+
+```text
+COD
+```
+
+---
+
+## 4.3 Order Item
+
+### Table: `order_items`
+
+| Field | Type | Required | Constraint |
+|---|---|---:|---|
+| `id` | string UUID | Yes | Primary key |
+| `orderId` | string UUID | Yes | FK orders.id |
+| `productId` | string UUID | Yes | FK products.id |
+| `productName` | string | Yes | Snapshot |
+| `unitPrice` | integer/decimal | Yes | Snapshot |
+| `quantity` | integer | Yes | `>= 1` |
+| `lineTotal` | integer/decimal | Yes | `unitPrice * quantity` |
+| `createdAt` | datetime | Yes |  |
+
+---
+
+## 4.4 Admin User
+
+### Table: `admin_users`
+
+| Field | Type | Required | Constraint |
+|---|---|---:|---|
+| `id` | string UUID | Yes | Primary key |
+| `email` | string | Yes | Unique |
+| `passwordHash` | string | Yes | Hashed |
+| `role` | enum/string | Yes | `ADMIN` |
+| `createdAt` | datetime | Yes |  |
+| `updatedAt` | datetime | Yes |  |
+
+---
+
+## 5. Business Rules
+
+## 5.1 Product Rules
+
+- `name` bắt buộc.
+- `price > 0`.
+- `stockQuantity >= 0`.
+- Public API chỉ trả về sản phẩm `isVisible = true`.
+- Admin API trả cả sản phẩm visible và hidden.
+- Sản phẩm `stockQuantity = 0` được xem là hết hàng.
+
+## 5.2 Cart Rules
+
+- Cart lưu client-side.
+- Cart item chỉ gồm:
+  - `productId`
+  - `quantity`
+- Frontend có thể validate số lượng dựa trên product detail/latest product data.
+- Backend vẫn phải kiểm tra tồn kho khi tạo order.
+
+## 5.3 Order Creation Rules
+
+- Client gửi danh sách `items` gồm `productId`, `quantity`.
+- Client không gửi `unitPrice`, `lineTotal`, `totalAmount` làm nguồn tin cậy.
+- Backend lấy giá hiện tại từ database.
+- Backend kiểm tra:
+  - Product tồn tại.
+  - Product visible.
+  - Product có đủ tồn kho.
+  - Quantity hợp lệ.
+- Nếu hợp lệ:
+  - Tạo order.
+  - Tạo order items với snapshot `productName`, `unitPrice`.
+  - Trừ tồn kho.
+  - Tính `totalAmount`.
+- Tất cả thao tác phải chạy trong transaction.
+
+## 5.4 Order Status Transition Rules
+
+Allowed transitions:
+
+```text
+NEW -> PROCESSING
+NEW -> CANCELLED
+PROCESSING -> SHIPPING
+PROCESSING -> CANCELLED
+SHIPPING -> COMPLETED
+```
+
+Disallowed examples:
+
+```text
+COMPLETED -> NEW
+CANCELLED -> COMPLETED
+CANCELLED -> NEW
+COMPLETED -> CANCELLED
+SHIPPING -> CANCELLED
+```
+
+> Theo PRD có rule hủy ở `NEW` hoặc `PROCESSING`. Không cho hủy khi `SHIPPING` trong MVP.
+
+### Stock restore rule
+
+- Khi chuyển order sang `CANCELLED`:
+  - Nếu order đã được trừ tồn kho lúc tạo.
+  - Và `stockRestoredAt` chưa set.
+  - Backend cộng lại tồn kho theo order items.
+  - Set `stockRestoredAt`.
+- Không cộng tồn kho nhiều lần.
 
 ---
 
@@ -270,1068 +376,1654 @@ Authorization: Bearer <jwt_token>
 
 ---
 
-# 6.1. Auth APIs
+# 6.1 Public Product APIs
 
-## 6.1.1. Register
+## GET `/api/products`
 
-```http
-POST /api/auth/register
-```
-
-### Request Body
-
-```json
-{
-  "fullName": "Nguyen Van A",
-  "email": "user@example.com",
-  "password": "Password123"
-}
-```
-
-### Validation
-
-| Field | Rule |
-|---|---|
-| `fullName` | Required, 2-100 chars |
-| `email` | Required, valid email, unique |
-| `password` | Required, min 6 chars |
-
-### Success Response `201`
-
-```json
-{
-  "success": true,
-  "data": {
-    "user": {
-      "id": 1,
-      "fullName": "Nguyen Van A",
-      "email": "user@example.com",
-      "role": "USER",
-      "status": "ACTIVE",
-      "createdAt": "2026-05-21T10:00:00.000Z"
-    },
-    "wallet": {
-      "id": 1,
-      "walletCode": "QP123456789",
-      "balance": 1000000,
-      "status": "ACTIVE"
-    }
-  }
-}
-```
-
-### Error Responses
-
-#### `409` Email already exists
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "EMAIL_ALREADY_EXISTS",
-    "message": "Email already exists"
-  }
-}
-```
-
-#### `400` Validation error
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Invalid registration data"
-  }
-}
-```
-
----
-
-## 6.1.2. Login
-
-```http
-POST /api/auth/login
-```
-
-### Request Body
-
-```json
-{
-  "email": "user@example.com",
-  "password": "Password123"
-}
-```
-
-### Success Response `200`
-
-```json
-{
-  "success": true,
-  "data": {
-    "token": "jwt_token_here",
-    "user": {
-      "id": 1,
-      "fullName": "Nguyen Van A",
-      "email": "user@example.com",
-      "role": "USER",
-      "status": "ACTIVE"
-    }
-  }
-}
-```
-
-### Error Responses
-
-#### `401`
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "INVALID_CREDENTIALS",
-    "message": "Invalid email or password"
-  }
-}
-```
-
-#### `403`
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "ACCOUNT_LOCKED",
-    "message": "Account is locked"
-  }
-}
-```
-
----
-
-## 6.1.3. Get Current User
-
-```http
-GET /api/auth/me
-```
+Lấy danh sách sản phẩm visible cho khách hàng.
 
 ### Auth
 
-Required.
+Không yêu cầu.
 
-### Success Response `200`
+### Query parameters
 
-```json
-{
-  "success": true,
-  "data": {
-    "user": {
-      "id": 1,
-      "fullName": "Nguyen Van A",
-      "email": "user@example.com",
-      "role": "USER",
-      "status": "ACTIVE",
-      "createdAt": "2026-05-21T10:00:00.000Z"
-    },
-    "wallet": {
-      "id": 1,
-      "walletCode": "QP123456789",
-      "balance": 1000000,
-      "status": "ACTIVE"
-    }
-  }
-}
-```
+| Name | Type | Required | Default | Description |
+|---|---|---:|---|---|
+| `page` | integer | No | `1` | Trang hiện tại |
+| `limit` | integer | No | `20` | Số item mỗi trang, max `100` |
 
----
-
-## 6.1.4. Logout
-
-JWT logout is handled on the frontend by deleting the token.
-
-Optional backend endpoint:
+### Request example
 
 ```http
-POST /api/auth/logout
+GET /api/products?page=1&limit=20
 ```
 
-### Auth
-
-Required.
-
-### Success Response `200`
+### Response `200`
 
 ```json
 {
-  "success": true,
-  "data": {
-    "message": "Logged out successfully"
-  }
-}
-```
-
----
-
-# 6.2. User Wallet APIs
-
-## 6.2.1. Get My Wallet
-
-```http
-GET /api/wallet/me
-```
-
-### Auth
-
-Required, `USER` or `ADMIN`.
-
-### Success Response `200`
-
-```json
-{
-  "success": true,
-  "data": {
-    "wallet": {
-      "id": 1,
-      "walletCode": "QP123456789",
-      "balance": 1000000,
-      "status": "ACTIVE",
-      "createdAt": "2026-05-21T10:00:00.000Z"
-    }
-  }
-}
-```
-
----
-
-## 6.2.2. Get User Dashboard
-
-```http
-GET /api/dashboard/me
-```
-
-### Auth
-
-Required, `USER`.
-
-### Success Response `200`
-
-```json
-{
-  "success": true,
-  "data": {
-    "balance": 950000,
-    "walletCode": "QP123456789",
-    "totalSent": 100000,
-    "totalReceived": 50000,
-    "recentTransactions": [
-      {
-        "id": 10,
-        "transactionCode": "TXN202605210001",
-        "type": "TRANSFER",
-        "direction": "SENT",
-        "amount": 50000,
-        "note": "Coffee",
-        "status": "SUCCESS",
-        "counterparty": {
-          "id": 2,
-          "fullName": "Tran Thi B",
-          "email": "b@example.com",
-          "walletCode": "QP987654321"
-        },
-        "createdAt": "2026-05-21T11:00:00.000Z"
-      }
-    ]
-  }
-}
-```
-
----
-
-# 6.3. Transfer APIs
-
-## 6.3.1. Transfer Money
-
-```http
-POST /api/transfers
-```
-
-### Auth
-
-Required, `USER`.
-
-### Request Body
-
-At least one receiver identifier is required: `receiverEmail` or `receiverWalletCode`.
-
-```json
-{
-  "receiverEmail": "receiver@example.com",
-  "receiverWalletCode": "QP987654321",
-  "amount": 50000,
-  "note": "Lunch payment"
-}
-```
-
-### Validation
-
-| Field | Rule |
-|---|---|
-| `receiverEmail` | Optional if `receiverWalletCode` is provided |
-| `receiverWalletCode` | Optional if `receiverEmail` is provided |
-| `amount` | Required, integer, greater than `0` |
-| `note` | Optional, max 255 chars |
-
-### Success Response `201`
-
-```json
-{
-  "success": true,
-  "data": {
-    "transaction": {
-      "id": 10,
-      "transactionCode": "TXN202605210001",
-      "type": "TRANSFER",
-      "amount": 50000,
-      "note": "Lunch payment",
-      "status": "SUCCESS",
-      "sender": {
-        "id": 1,
-        "fullName": "Nguyen Van A",
-        "email": "user@example.com",
-        "walletCode": "QP123456789"
-      },
-      "receiver": {
-        "id": 2,
-        "fullName": "Tran Thi B",
-        "email": "receiver@example.com",
-        "walletCode": "QP987654321"
-      },
-      "createdAt": "2026-05-21T11:00:00.000Z"
-    },
-    "wallet": {
-      "balance": 950000
-    }
-  }
-}
-```
-
-### Error Responses
-
-#### `404` Receiver not found
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "RECEIVER_NOT_FOUND",
-    "message": "Receiver not found"
-  }
-}
-```
-
-#### `422` Insufficient balance
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "INSUFFICIENT_BALANCE",
-    "message": "Insufficient balance"
-  }
-}
-```
-
-#### `422` Cannot transfer to self
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "CANNOT_TRANSFER_TO_SELF",
-    "message": "Cannot transfer money to yourself"
-  }
-}
-```
-
-#### `400` Invalid amount
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "INVALID_AMOUNT",
-    "message": "Amount must be greater than 0"
-  }
-}
-```
-
----
-
-# 6.4. QR APIs
-
-## 6.4.1. Generate QR Receive Payload
-
-```http
-POST /api/qr/generate
-```
-
-### Auth
-
-Required, `USER`.
-
-### Request Body
-
-```json
-{
-  "amount": 50000,
-  "note": "Payment request"
-}
-```
-
-### Notes
-
-- `amount` is optional.
-- `note` is optional.
-- If amount is not included, payer must enter amount manually before paying.
-
-### Success Response `200`
-
-```json
-{
-  "success": true,
-  "data": {
-    "payload": {
-      "type": "QUICKPAY_QR",
-      "receiverWalletCode": "QP123456789",
-      "amount": 50000,
-      "note": "Payment request"
-    },
-    "payloadString": "{\"type\":\"QUICKPAY_QR\",\"receiverWalletCode\":\"QP123456789\",\"amount\":50000,\"note\":\"Payment request\"}"
-  }
-}
-```
-
----
-
-## 6.4.2. Parse QR Payload
-
-```http
-POST /api/qr/parse
-```
-
-### Auth
-
-Required, `USER`.
-
-### Request Body
-
-```json
-{
-  "payloadString": "{\"type\":\"QUICKPAY_QR\",\"receiverWalletCode\":\"QP123456789\",\"amount\":50000,\"note\":\"Payment request\"}"
-}
-```
-
-### Success Response `200`
-
-```json
-{
-  "success": true,
-  "data": {
-    "payload": {
-      "type": "QUICKPAY_QR",
-      "receiverWalletCode": "QP123456789",
-      "amount": 50000,
-      "note": "Payment request"
-    },
-    "receiver": {
-      "id": 1,
-      "fullName": "Nguyen Van A",
-      "email": "user@example.com",
-      "walletCode": "QP123456789"
-    }
-  }
-}
-```
-
-### Error Response `400`
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "INVALID_QR_PAYLOAD",
-    "message": "Invalid QR payload"
-  }
-}
-```
-
----
-
-## 6.4.3. Pay by QR Payload
-
-```http
-POST /api/qr/pay
-```
-
-### Auth
-
-Required, `USER`.
-
-### Request Body
-
-```json
-{
-  "payloadString": "{\"type\":\"QUICKPAY_QR\",\"receiverWalletCode\":\"QP987654321\",\"amount\":50000,\"note\":\"Payment request\"}",
-  "amount": 50000,
-  "note": "Payment request"
-}
-```
-
-### Notes
-
-- If QR payload contains `amount`, backend should use the payload amount.
-- If QR payload does not contain `amount`, request body `amount` is required.
-- Request `note` may override or supplement payload note, depending on implementation. For MVP, use request `note` if provided; otherwise use payload `note`.
-
-### Success Response `201`
-
-```json
-{
-  "success": true,
-  "data": {
-    "transaction": {
-      "id": 11,
-      "transactionCode": "TXN202605210002",
-      "type": "QR_PAYMENT",
-      "amount": 50000,
-      "note": "Payment request",
-      "status": "SUCCESS",
-      "sender": {
-        "id": 2,
-        "fullName": "Tran Thi B",
-        "email": "payer@example.com",
-        "walletCode": "QP222222222"
-      },
-      "receiver": {
-        "id": 1,
-        "fullName": "Nguyen Van A",
-        "email": "receiver@example.com",
-        "walletCode": "QP987654321"
-      },
-      "createdAt": "2026-05-21T11:05:00.000Z"
-    },
-    "wallet": {
-      "balance": 900000
-    }
-  }
-}
-```
-
-### Error Responses
-
-Same as transfer:
-
-- `INVALID_QR_PAYLOAD`
-- `RECEIVER_NOT_FOUND`
-- `INVALID_AMOUNT`
-- `INSUFFICIENT_BALANCE`
-- `CANNOT_TRANSFER_TO_SELF`
-
----
-
-# 6.5. Transaction APIs
-
-## 6.5.1. Get My Transactions
-
-```http
-GET /api/transactions/me
-```
-
-### Auth
-
-Required, `USER`.
-
-### Query Params
-
-| Param | Type | Required | Description |
-|---|---|---|---|
-| `direction` | string | No | `ALL`, `SENT`, `RECEIVED` |
-| `status` | string | No | `SUCCESS`, `FAILED` |
-| `type` | string | No | `TRANSFER`, `QR_PAYMENT` |
-| `fromDate` | string | No | ISO date |
-| `toDate` | string | No | ISO date |
-| `page` | number | No | Default `1` |
-| `limit` | number | No | Default `20`, max `100` |
-
-### Example
-
-```http
-GET /api/transactions/me?direction=ALL&status=SUCCESS&page=1&limit=20
-```
-
-### Success Response `200`
-
-```json
-{
-  "success": true,
-  "data": {
-    "items": [
-      {
-        "id": 10,
-        "transactionCode": "TXN202605210001",
-        "type": "TRANSFER",
-        "direction": "SENT",
-        "amount": 50000,
-        "note": "Lunch payment",
-        "status": "SUCCESS",
-        "failureReason": null,
-        "counterparty": {
-          "id": 2,
-          "fullName": "Tran Thi B",
-          "email": "receiver@example.com",
-          "walletCode": "QP987654321"
-        },
-        "createdAt": "2026-05-21T11:00:00.000Z"
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 20,
-      "totalItems": 1,
-      "totalPages": 1
-    }
-  }
-}
-```
-
----
-
-## 6.5.2. Get Transaction Detail
-
-```http
-GET /api/transactions/:transactionId
-```
-
-### Auth
-
-Required.
-
-### Authorization
-
-- `USER`: can only view own related transactions.
-- `ADMIN`: can view all transactions.
-
-### Success Response `200`
-
-```json
-{
-  "success": true,
-  "data": {
-    "transaction": {
-      "id": 10,
-      "transactionCode": "TXN202605210001",
-      "type": "TRANSFER",
-      "amount": 50000,
-      "note": "Lunch payment",
-      "status": "SUCCESS",
-      "failureReason": null,
-      "sender": {
-        "id": 1,
-        "fullName": "Nguyen Van A",
-        "email": "user@example.com",
-        "walletCode": "QP123456789"
-      },
-      "receiver": {
-        "id": 2,
-        "fullName": "Tran Thi B",
-        "email": "receiver@example.com",
-        "walletCode": "QP987654321"
-      },
-      "createdAt": "2026-05-21T11:00:00.000Z"
-    }
-  }
-}
-```
-
----
-
-# 6.6. Admin APIs
-
-All admin APIs require:
-
-```txt
-Role: ADMIN
-```
-
----
-
-## 6.6.1. Admin Dashboard
-
-```http
-GET /api/admin/dashboard
-```
-
-### Success Response `200`
-
-```json
-{
-  "success": true,
-  "data": {
-    "totalUsers": 100,
-    "totalTransactions": 250,
-    "totalSuccessfulTransactionValue": 12500000,
-    "recentTransactions": [
-      {
-        "id": 10,
-        "transactionCode": "TXN202605210001",
-        "type": "TRANSFER",
-        "amount": 50000,
-        "status": "SUCCESS",
-        "sender": {
-          "id": 1,
-          "fullName": "Nguyen Van A",
-          "email": "user@example.com"
-        },
-        "receiver": {
-          "id": 2,
-          "fullName": "Tran Thi B",
-          "email": "receiver@example.com"
-        },
-        "createdAt": "2026-05-21T11:00:00.000Z"
-      }
-    ]
-  }
-}
-```
-
----
-
-## 6.6.2. Get Users
-
-```http
-GET /api/admin/users
-```
-
-### Query Params
-
-| Param | Type | Required | Description |
-|---|---|---|---|
-| `search` | string | No | Search by name/email |
-| `status` | string | No | `ACTIVE`, `LOCKED` |
-| `role` | string | No | `USER`, `ADMIN` |
-| `page` | number | No | Default `1` |
-| `limit` | number | No | Default `20`, max `100` |
-
-### Success Response `200`
-
-```json
-{
-  "success": true,
-  "data": {
-    "items": [
-      {
-        "id": 1,
-        "fullName": "Nguyen Van A",
-        "email": "user@example.com",
-        "role": "USER",
-        "status": "ACTIVE",
-        "wallet": {
-          "walletCode": "QP123456789",
-          "balance": 950000,
-          "status": "ACTIVE"
-        },
-        "createdAt": "2026-05-21T10:00:00.000Z"
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 20,
-      "totalItems": 1,
-      "totalPages": 1
-    }
-  }
-}
-```
-
----
-
-## 6.6.3. Get User Detail
-
-```http
-GET /api/admin/users/:userId
-```
-
-### Success Response `200`
-
-```json
-{
-  "success": true,
-  "data": {
-    "user": {
-      "id": 1,
-      "fullName": "Nguyen Van A",
-      "email": "user@example.com",
-      "role": "USER",
-      "status": "ACTIVE",
+  "items": [
+    {
+      "id": "prd_001",
+      "name": "Áo thun basic",
+      "description": "Áo thun cotton",
+      "price": 150000,
+      "imageUrl": "https://example.com/images/ao-thun.jpg",
+      "stockQuantity": 10,
+      "stockStatus": "IN_STOCK",
       "createdAt": "2026-05-21T10:00:00.000Z",
       "updatedAt": "2026-05-21T10:00:00.000Z"
     },
-    "wallet": {
-      "id": 1,
-      "walletCode": "QP123456789",
-      "balance": 950000,
-      "status": "ACTIVE"
+    {
+      "id": "prd_002",
+      "name": "Quần jeans",
+      "description": "Quần jeans xanh",
+      "price": 350000,
+      "imageUrl": null,
+      "stockQuantity": 0,
+      "stockStatus": "OUT_OF_STOCK",
+      "createdAt": "2026-05-21T10:00:00.000Z",
+      "updatedAt": "2026-05-21T10:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "totalItems": 2,
+    "totalPages": 1
+  }
+}
+```
+
+### Notes
+
+- Chỉ trả sản phẩm `isVisible = true`.
+- Public response có thể không cần trả `isVisible`.
+
+---
+
+## GET `/api/products/{id}`
+
+Lấy chi tiết một sản phẩm visible.
+
+### Auth
+
+Không yêu cầu.
+
+### Path parameters
+
+| Name | Type | Required |
+|---|---|---:|
+| `id` | string | Yes |
+
+### Request example
+
+```http
+GET /api/products/prd_001
+```
+
+### Response `200`
+
+```json
+{
+  "id": "prd_001",
+  "name": "Áo thun basic",
+  "description": "Áo thun cotton thoáng mát",
+  "price": 150000,
+  "imageUrl": "https://example.com/images/ao-thun.jpg",
+  "stockQuantity": 10,
+  "stockStatus": "IN_STOCK",
+  "createdAt": "2026-05-21T10:00:00.000Z",
+  "updatedAt": "2026-05-21T10:00:00.000Z"
+}
+```
+
+### Error `404`
+
+Khi product không tồn tại hoặc `isVisible = false`.
+
+```json
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Không tìm thấy sản phẩm"
+  }
+}
+```
+
+---
+
+# 6.2 Public Order APIs
+
+## POST `/api/orders`
+
+Tạo đơn hàng COD từ giỏ hàng client-side.
+
+### Auth
+
+Không yêu cầu.
+
+### Request body
+
+```json
+{
+  "customerName": "Nguyễn Văn A",
+  "customerPhone": "0901234567",
+  "customerEmail": "a@example.com",
+  "shippingAddress": "123 Nguyễn Trãi, Quận 1, TP.HCM",
+  "note": "Giao giờ hành chính",
+  "items": [
+    {
+      "productId": "prd_001",
+      "quantity": 2
     },
-    "stats": {
-      "totalSent": 100000,
-      "totalReceived": 50000,
-      "transactionCount": 3
+    {
+      "productId": "prd_002",
+      "quantity": 1
     }
-  }
+  ]
 }
 ```
 
----
+### Validation
 
-## 6.6.4. Get User Transactions
-
-```http
-GET /api/admin/users/:userId/transactions
-```
-
-### Query Params
-
-Same as `/api/transactions/me`.
-
-### Success Response `200`
-
-```json
-{
-  "success": true,
-  "data": {
-    "items": [
-      {
-        "id": 10,
-        "transactionCode": "TXN202605210001",
-        "type": "TRANSFER",
-        "direction": "SENT",
-        "amount": 50000,
-        "note": "Lunch payment",
-        "status": "SUCCESS",
-        "counterparty": {
-          "id": 2,
-          "fullName": "Tran Thi B",
-          "email": "receiver@example.com",
-          "walletCode": "QP987654321"
-        },
-        "createdAt": "2026-05-21T11:00:00.000Z"
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 20,
-      "totalItems": 1,
-      "totalPages": 1
-    }
-  }
-}
-```
-
----
-
-## 6.6.5. Get All Transactions
-
-```http
-GET /api/admin/transactions
-```
-
-### Query Params
-
-| Param | Type | Required | Description |
-|---|---|---|---|
-| `search` | string | No | Transaction code/email/name |
-| `status` | string | No | `SUCCESS`, `FAILED` |
-| `type` | string | No | `TRANSFER`, `QR_PAYMENT` |
-| `fromDate` | string | No | ISO date |
-| `toDate` | string | No | ISO date |
-| `page` | number | No | Default `1` |
-| `limit` | number | No | Default `20`, max `100` |
-
-### Success Response `200`
-
-```json
-{
-  "success": true,
-  "data": {
-    "items": [
-      {
-        "id": 10,
-        "transactionCode": "TXN202605210001",
-        "type": "TRANSFER",
-        "amount": 50000,
-        "note": "Lunch payment",
-        "status": "SUCCESS",
-        "failureReason": null,
-        "sender": {
-          "id": 1,
-          "fullName": "Nguyen Van A",
-          "email": "user@example.com",
-          "walletCode": "QP123456789"
-        },
-        "receiver": {
-          "id": 2,
-          "fullName": "Tran Thi B",
-          "email": "receiver@example.com",
-          "walletCode": "QP987654321"
-        },
-        "createdAt": "2026-05-21T11:00:00.000Z"
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 20,
-      "totalItems": 1,
-      "totalPages": 1
-    }
-  }
-}
-```
-
----
-
-# 7. SQLite Schema Draft
-
-```sql
-CREATE TABLE users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  full_name TEXT NOT NULL,
-  email TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'USER',
-  status TEXT NOT NULL DEFAULT 'ACTIVE',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
-CREATE TABLE wallets (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL UNIQUE,
-  wallet_code TEXT NOT NULL UNIQUE,
-  balance INTEGER NOT NULL DEFAULT 1000000,
-  status TEXT NOT NULL DEFAULT 'ACTIVE',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE TABLE transactions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  transaction_code TEXT NOT NULL UNIQUE,
-  sender_user_id INTEGER NOT NULL,
-  receiver_user_id INTEGER NOT NULL,
-  sender_wallet_id INTEGER NOT NULL,
-  receiver_wallet_id INTEGER NOT NULL,
-  amount INTEGER NOT NULL,
-  note TEXT,
-  status TEXT NOT NULL,
-  failure_reason TEXT,
-  type TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  FOREIGN KEY (sender_user_id) REFERENCES users(id),
-  FOREIGN KEY (receiver_user_id) REFERENCES users(id),
-  FOREIGN KEY (sender_wallet_id) REFERENCES wallets(id),
-  FOREIGN KEY (receiver_wallet_id) REFERENCES wallets(id)
-);
-
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_wallets_wallet_code ON wallets(wallet_code);
-CREATE INDEX idx_transactions_code ON transactions(transaction_code);
-CREATE INDEX idx_transactions_sender ON transactions(sender_user_id);
-CREATE INDEX idx_transactions_receiver ON transactions(receiver_user_id);
-CREATE INDEX idx_transactions_created_at ON transactions(created_at);
-```
-
----
-
-# 8. JWT Payload
-
-Recommended JWT payload:
-
-```json
-{
-  "sub": 1,
-  "email": "user@example.com",
-  "role": "USER",
-  "iat": 1779367200,
-  "exp": 1779453600
-}
-```
-
-Where:
-
-| Field | Meaning |
+| Field | Rule |
 |---|---|
-| `sub` | User ID |
-| `email` | User email |
-| `role` | `USER` or `ADMIN` |
-| `iat` | Issued at |
-| `exp` | Expiration |
+| `customerName` | Required, trim not empty |
+| `customerPhone` | Required, valid phone |
+| `customerEmail` | Optional, valid email if provided |
+| `shippingAddress` | Required, trim not empty |
+| `note` | Optional |
+| `items` | Required, array, min length 1 |
+| `items[].productId` | Required |
+| `items[].quantity` | Required, integer, `>= 1` |
 
-Recommended expiration:
+### Response `201`
 
-```txt
-24h
+```json
+{
+  "id": "ord_001",
+  "customerName": "Nguyễn Văn A",
+  "customerPhone": "0901234567",
+  "customerEmail": "a@example.com",
+  "shippingAddress": "123 Nguyễn Trãi, Quận 1, TP.HCM",
+  "note": "Giao giờ hành chính",
+  "totalAmount": 650000,
+  "status": "NEW",
+  "statusLabel": "Mới",
+  "paymentMethod": "COD",
+  "items": [
+    {
+      "id": "ori_001",
+      "productId": "prd_001",
+      "productName": "Áo thun basic",
+      "unitPrice": 150000,
+      "quantity": 2,
+      "lineTotal": 300000
+    },
+    {
+      "id": "ori_002",
+      "productId": "prd_002",
+      "productName": "Quần jeans",
+      "unitPrice": 350000,
+      "quantity": 1,
+      "lineTotal": 350000
+    }
+  ],
+  "createdAt": "2026-05-21T10:00:00.000Z",
+  "updatedAt": "2026-05-21T10:00:00.000Z"
+}
+```
+
+### Error `422` validation
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Dữ liệu không hợp lệ",
+    "details": [
+      {
+        "field": "customerName",
+        "message": "Vui lòng nhập họ tên"
+      },
+      {
+        "field": "customerPhone",
+        "message": "Số điện thoại không hợp lệ"
+      },
+      {
+        "field": "shippingAddress",
+        "message": "Vui lòng nhập địa chỉ giao hàng"
+      }
+    ]
+  }
+}
+```
+
+### Error `409` insufficient stock
+
+```json
+{
+  "error": {
+    "code": "INSUFFICIENT_STOCK",
+    "message": "Một số sản phẩm không đủ tồn kho",
+    "details": [
+      {
+        "productId": "prd_001",
+        "productName": "Áo thun basic",
+        "requestedQuantity": 5,
+        "availableQuantity": 2,
+        "message": "Số lượng vượt quá tồn kho"
+      }
+    ]
+  }
+}
+```
+
+### Error `404` product not found
+
+```json
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Không tìm thấy sản phẩm",
+    "details": [
+      {
+        "productId": "prd_unknown",
+        "message": "Sản phẩm không tồn tại"
+      }
+    ]
+  }
+}
+```
+
+### Important backend behavior
+
+Backend phải dùng transaction:
+
+```text
+BEGIN
+  Validate customer info
+  Validate items
+  Lock products rows / ensure atomic stock check
+  Check stock
+  Create order
+  Create order_items
+  Decrease products.stockQuantity
+COMMIT
 ```
 
 ---
 
-# 9. Seed Data Recommendation
+# 6.3 Admin Auth APIs
 
-For MVP development, create one admin account by seed script.
+## POST `/api/admin/login`
 
-```txt
-Email: admin@quickpay.local
-Password: Admin123
-Role: ADMIN
+Đăng nhập admin.
+
+### Auth
+
+Không yêu cầu.
+
+### Request body
+
+```json
+{
+  "email": "admin@example.com",
+  "password": "password123"
+}
 ```
 
-Admin may also have a wallet for consistency, but admin wallet is not required for MVP business flow.
+### Validation
+
+| Field | Rule |
+|---|---|
+| `email` | Required, email |
+| `password` | Required |
+
+### Response `200`
+
+Nếu dùng HttpOnly cookie, response set cookie:
+
+```http
+Set-Cookie: admin_session=<session>; HttpOnly; Secure; SameSite=Lax; Path=/
+```
+
+Body:
+
+```json
+{
+  "user": {
+    "id": "adm_001",
+    "email": "admin@example.com",
+    "role": "ADMIN"
+  }
+}
+```
+
+### Error `401`
+
+```json
+{
+  "error": {
+    "code": "INVALID_CREDENTIALS",
+    "message": "Thông tin đăng nhập không chính xác"
+  }
+}
+```
+
+### Error `422`
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Dữ liệu không hợp lệ",
+    "details": [
+      {
+        "field": "email",
+        "message": "Email không hợp lệ"
+      },
+      {
+        "field": "password",
+        "message": "Vui lòng nhập mật khẩu"
+      }
+    ]
+  }
+}
+```
 
 ---
 
-# 10. Locked MVP API Contract Summary
+## POST `/api/admin/logout`
 
-The MVP contract includes these endpoint groups:
+Đăng xuất admin.
 
-```txt
-Auth:
-POST   /api/auth/register
-POST   /api/auth/login
-GET    /api/auth/me
-POST   /api/auth/logout
+### Auth
 
-Wallet/User:
-GET    /api/wallet/me
-GET    /api/dashboard/me
+Yêu cầu admin session.
 
-Transfer:
-POST   /api/transfers
+### Request body
 
-QR:
-POST   /api/qr/generate
-POST   /api/qr/parse
-POST   /api/qr/pay
+Không có.
 
-Transactions:
-GET    /api/transactions/me
-GET    /api/transactions/:transactionId
+### Response `204`
 
-Admin:
-GET    /api/admin/dashboard
-GET    /api/admin/users
-GET    /api/admin/users/:userId
-GET    /api/admin/users/:userId/transactions
-GET    /api/admin/transactions
+Không có body.
+
+### Behavior
+
+- Xóa session server-side nếu có.
+- Clear cookie:
+
+```http
+Set-Cookie: admin_session=; Max-Age=0; Path=/
 ```
 
-This API contract should be considered the baseline for Wave 1 implementation. Any future change to endpoint path, payload shape, response shape, status code, role behavior, or data model should be reviewed and approved before frontend/backend implementation continues.
+---
+
+## GET `/api/admin/me`
+
+Kiểm tra session admin hiện tại.
+
+### Auth
+
+Yêu cầu admin session.
+
+### Response `200`
+
+```json
+{
+  "user": {
+    "id": "adm_001",
+    "email": "admin@example.com",
+    "role": "ADMIN"
+  }
+}
+```
+
+### Error `401`
+
+```json
+{
+  "error": {
+    "code": "UNAUTHENTICATED",
+    "message": "Vui lòng đăng nhập"
+  }
+}
+```
+
+---
+
+# 6.4 Admin Product APIs
+
+Tất cả endpoint trong nhóm này yêu cầu admin auth.
+
+---
+
+## GET `/api/admin/products`
+
+Lấy danh sách toàn bộ sản phẩm cho admin.
+
+### Query parameters
+
+| Name | Type | Required | Default | Description |
+|---|---|---:|---|---|
+| `page` | integer | No | `1` | Trang hiện tại |
+| `limit` | integer | No | `20` | Max `100` |
+| `q` | string | No |  | Tìm theo tên sản phẩm, P1 |
+| `visibility` | string | No | `ALL` | `ALL`, `VISIBLE`, `HIDDEN` |
+
+### Request example
+
+```http
+GET /api/admin/products?page=1&limit=20&visibility=ALL
+```
+
+### Response `200`
+
+```json
+{
+  "items": [
+    {
+      "id": "prd_001",
+      "name": "Áo thun basic",
+      "description": "Áo thun cotton",
+      "price": 150000,
+      "imageUrl": "https://example.com/images/ao-thun.jpg",
+      "stockQuantity": 10,
+      "stockStatus": "IN_STOCK",
+      "isVisible": true,
+      "createdAt": "2026-05-21T10:00:00.000Z",
+      "updatedAt": "2026-05-21T10:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "totalItems": 1,
+    "totalPages": 1
+  }
+}
+```
+
+---
+
+## POST `/api/admin/products`
+
+Tạo sản phẩm mới.
+
+### Request body
+
+```json
+{
+  "name": "Áo thun basic",
+  "description": "Áo thun cotton",
+  "price": 150000,
+  "imageUrl": "https://example.com/images/ao-thun.jpg",
+  "stockQuantity": 10,
+  "isVisible": true
+}
+```
+
+### Validation
+
+| Field | Rule |
+|---|---|
+| `name` | Required, trim not empty |
+| `description` | Optional |
+| `price` | Required, number/integer, `> 0` |
+| `imageUrl` | Optional, URL if provided |
+| `stockQuantity` | Required, integer, `>= 0` |
+| `isVisible` | Required boolean |
+
+### Response `201`
+
+```json
+{
+  "id": "prd_001",
+  "name": "Áo thun basic",
+  "description": "Áo thun cotton",
+  "price": 150000,
+  "imageUrl": "https://example.com/images/ao-thun.jpg",
+  "stockQuantity": 10,
+  "stockStatus": "IN_STOCK",
+  "isVisible": true,
+  "createdAt": "2026-05-21T10:00:00.000Z",
+  "updatedAt": "2026-05-21T10:00:00.000Z"
+}
+```
+
+### Error `422`
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Dữ liệu không hợp lệ",
+    "details": [
+      {
+        "field": "name",
+        "message": "Vui lòng nhập tên sản phẩm"
+      },
+      {
+        "field": "price",
+        "message": "Giá bán phải lớn hơn 0"
+      },
+      {
+        "field": "stockQuantity",
+        "message": "Tồn kho không được nhỏ hơn 0"
+      }
+    ]
+  }
+}
+```
+
+---
+
+## GET `/api/admin/products/{id}`
+
+Lấy chi tiết sản phẩm cho admin.
+
+### Path parameters
+
+| Name | Type | Required |
+|---|---|---:|
+| `id` | string | Yes |
+
+### Response `200`
+
+```json
+{
+  "id": "prd_001",
+  "name": "Áo thun basic",
+  "description": "Áo thun cotton",
+  "price": 150000,
+  "imageUrl": "https://example.com/images/ao-thun.jpg",
+  "stockQuantity": 10,
+  "stockStatus": "IN_STOCK",
+  "isVisible": true,
+  "createdAt": "2026-05-21T10:00:00.000Z",
+  "updatedAt": "2026-05-21T10:00:00.000Z"
+}
+```
+
+### Error `404`
+
+```json
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Không tìm thấy sản phẩm"
+  }
+}
+```
+
+---
+
+## PATCH `/api/admin/products/{id}`
+
+Cập nhật sản phẩm.
+
+### Request body
+
+Partial update. Field nào gửi lên thì cập nhật field đó.
+
+```json
+{
+  "name": "Áo thun basic updated",
+  "description": "Mô tả mới",
+  "price": 160000,
+  "imageUrl": "https://example.com/images/new.jpg",
+  "stockQuantity": 5,
+  "isVisible": false
+}
+```
+
+### Validation
+
+Nếu field xuất hiện thì validate:
+
+| Field | Rule |
+|---|---|
+| `name` | Trim not empty |
+| `description` | Nullable/string |
+| `price` | Number/integer, `> 0` |
+| `imageUrl` | Nullable or valid URL |
+| `stockQuantity` | Integer, `>= 0` |
+| `isVisible` | Boolean |
+
+### Response `200`
+
+```json
+{
+  "id": "prd_001",
+  "name": "Áo thun basic updated",
+  "description": "Mô tả mới",
+  "price": 160000,
+  "imageUrl": "https://example.com/images/new.jpg",
+  "stockQuantity": 5,
+  "stockStatus": "IN_STOCK",
+  "isVisible": false,
+  "createdAt": "2026-05-21T10:00:00.000Z",
+  "updatedAt": "2026-05-21T11:00:00.000Z"
+}
+```
+
+### Error `404`
+
+```json
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Không tìm thấy sản phẩm"
+  }
+}
+```
+
+### Error `422`
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Dữ liệu không hợp lệ",
+    "details": [
+      {
+        "field": "price",
+        "message": "Giá bán phải lớn hơn 0"
+      }
+    ]
+  }
+}
+```
+
+---
+
+# 6.5 Admin Order APIs
+
+Tất cả endpoint trong nhóm này yêu cầu admin auth.
+
+---
+
+## GET `/api/admin/orders`
+
+Lấy danh sách đơn hàng.
+
+### Query parameters
+
+| Name | Type | Required | Default | Description |
+|---|---|---:|---|---|
+| `page` | integer | No | `1` | Trang hiện tại |
+| `limit` | integer | No | `20` | Max `100` |
+| `status` | string | No |  | `NEW`, `PROCESSING`, `SHIPPING`, `COMPLETED`, `CANCELLED` |
+
+### Request example
+
+```http
+GET /api/admin/orders?page=1&limit=20&status=NEW
+```
+
+### Response `200`
+
+```json
+{
+  "items": [
+    {
+      "id": "ord_001",
+      "customerName": "Nguyễn Văn A",
+      "customerPhone": "0901234567",
+      "totalAmount": 650000,
+      "status": "NEW",
+      "statusLabel": "Mới",
+      "paymentMethod": "COD",
+      "createdAt": "2026-05-21T10:00:00.000Z",
+      "updatedAt": "2026-05-21T10:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "totalItems": 1,
+    "totalPages": 1
+  }
+}
+```
+
+---
+
+## GET `/api/admin/orders/{id}`
+
+Lấy chi tiết đơn hàng.
+
+### Path parameters
+
+| Name | Type | Required |
+|---|---|---:|
+| `id` | string | Yes |
+
+### Response `200`
+
+```json
+{
+  "id": "ord_001",
+  "customerName": "Nguyễn Văn A",
+  "customerPhone": "0901234567",
+  "customerEmail": "a@example.com",
+  "shippingAddress": "123 Nguyễn Trãi, Quận 1, TP.HCM",
+  "note": "Giao giờ hành chính",
+  "totalAmount": 650000,
+  "status": "NEW",
+  "statusLabel": "Mới",
+  "paymentMethod": "COD",
+  "stockRestoredAt": null,
+  "items": [
+    {
+      "id": "ori_001",
+      "productId": "prd_001",
+      "productName": "Áo thun basic",
+      "unitPrice": 150000,
+      "quantity": 2,
+      "lineTotal": 300000
+    },
+    {
+      "id": "ori_002",
+      "productId": "prd_002",
+      "productName": "Quần jeans",
+      "unitPrice": 350000,
+      "quantity": 1,
+      "lineTotal": 350000
+    }
+  ],
+  "createdAt": "2026-05-21T10:00:00.000Z",
+  "updatedAt": "2026-05-21T10:00:00.000Z"
+}
+```
+
+### Error `404`
+
+```json
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Không tìm thấy đơn hàng"
+  }
+}
+```
+
+---
+
+## PATCH `/api/admin/orders/{id}/status`
+
+Cập nhật trạng thái đơn hàng.
+
+### Request body
+
+```json
+{
+  "status": "PROCESSING"
+}
+```
+
+### Validation
+
+| Field | Rule |
+|---|---|
+| `status` | Required, one of `NEW`, `PROCESSING`, `SHIPPING`, `COMPLETED`, `CANCELLED` |
+
+### Response `200`
+
+```json
+{
+  "id": "ord_001",
+  "status": "PROCESSING",
+  "statusLabel": "Đang xử lý",
+  "updatedAt": "2026-05-21T11:00:00.000Z"
+}
+```
+
+### Error `404`
+
+```json
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Không tìm thấy đơn hàng"
+  }
+}
+```
+
+### Error `409` invalid transition
+
+```json
+{
+  "error": {
+    "code": "INVALID_ORDER_STATUS_TRANSITION",
+    "message": "Không thể chuyển đơn hoàn tất về trạng thái mới",
+    "details": {
+      "currentStatus": "COMPLETED",
+      "requestedStatus": "NEW"
+    }
+  }
+}
+```
+
+### Error `422`
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Dữ liệu không hợp lệ",
+    "details": [
+      {
+        "field": "status",
+        "message": "Trạng thái đơn hàng không hợp lệ"
+      }
+    ]
+  }
+}
+```
+
+### Stock restore behavior on cancellation
+
+Khi request:
+
+```json
+{
+  "status": "CANCELLED"
+}
+```
+
+Nếu transition hợp lệ:
+
+- Backend cộng lại tồn kho cho từng item.
+- Set `orders.stockRestoredAt`.
+- Không restore lại nếu `stockRestoredAt` đã có giá trị.
+
+Response:
+
+```json
+{
+  "id": "ord_001",
+  "status": "CANCELLED",
+  "statusLabel": "Đã hủy",
+  "stockRestoredAt": "2026-05-21T11:00:00.000Z",
+  "updatedAt": "2026-05-21T11:00:00.000Z"
+}
+```
+
+---
+
+# 7. Frontend Route/API Mapping
+
+## 7.1 Public Routes
+
+| Route | API dùng |
+|---|---|
+| `/` | `GET /api/products` |
+| `/products/:id` | `GET /api/products/:id` |
+| `/cart` | `GET /api/products/:id` hoặc dùng product snapshot trong localStorage, khuyến nghị refresh lại product data |
+| `/checkout` | Refresh product data, `POST /api/orders` |
+| `/order-success/:id` | Dữ liệu có thể lấy từ response tạo order và lưu tạm client-side. MVP chưa có public get order endpoint |
+
+> Nếu cần reload được trang `/order-success/:id`, cần thêm public endpoint `GET /api/orders/:id`. Tuy nhiên endpoint này có rủi ro lộ thông tin đơn hàng. MVP khuyến nghị không thêm, hoặc dùng token tra cứu riêng.
+
+## 7.2 Admin Routes
+
+| Route | API dùng |
+|---|---|
+| `/admin/login` | `POST /api/admin/login` |
+| `/admin` | `GET /api/admin/me` |
+| `/admin/products` | `GET /api/admin/products` |
+| `/admin/products/new` | `POST /api/admin/products` |
+| `/admin/products/:id/edit` | `GET /api/admin/products/:id`, `PATCH /api/admin/products/:id` |
+| `/admin/orders` | `GET /api/admin/orders` |
+| `/admin/orders/:id` | `GET /api/admin/orders/:id`, `PATCH /api/admin/orders/:id/status` |
+
+---
+
+# 8. LocalStorage Cart Contract
+
+Frontend lưu giỏ hàng theo format:
+
+```json
+{
+  "items": [
+    {
+      "productId": "prd_001",
+      "quantity": 2
+    }
+  ],
+  "updatedAt": "2026-05-21T10:00:00.000Z"
+}
+```
+
+Key đề xuất:
+
+```text
+mvp_shop_cart
+```
+
+Frontend không nên lưu `price` làm nguồn tính tiền cuối cùng. Nếu có lưu để hiển thị nhanh thì phải refresh lại từ API trước checkout.
+
+---
+
+# 9. OpenAPI YAML Draft
+
+```yaml
+openapi: 3.0.3
+info:
+  title: Online Store MVP API
+  version: 1.0.0
+servers:
+  - url: /api
+
+paths:
+  /products:
+    get:
+      summary: List visible products
+      tags: [Public Products]
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: Product list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductListResponse"
+
+  /products/{id}:
+    get:
+      summary: Get visible product detail
+      tags: [Public Products]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Product detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicProduct"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /orders:
+    post:
+      summary: Create COD order
+      tags: [Public Orders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderRequest"
+      responses:
+        "201":
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+        "409":
+          description: Insufficient stock
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /admin/login:
+    post:
+      summary: Admin login
+      tags: [Admin Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminLoginRequest"
+      responses:
+        "200":
+          description: Logged in
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminMeResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/logout:
+    post:
+      summary: Admin logout
+      tags: [Admin Auth]
+      security:
+        - cookieAuth: []
+      responses:
+        "204":
+          description: Logged out
+
+  /admin/me:
+    get:
+      summary: Get current admin
+      tags: [Admin Auth]
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Current admin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminMeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+  /admin/products:
+    get:
+      summary: List all products for admin
+      tags: [Admin Products]
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - in: query
+          name: visibility
+          schema:
+            type: string
+            enum: [ALL, VISIBLE, HIDDEN]
+            default: ALL
+      responses:
+        "200":
+          description: Product list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminProductListResponse"
+
+    post:
+      summary: Create product
+      tags: [Admin Products]
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+      responses:
+        "201":
+          description: Product created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminProduct"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /admin/products/{id}:
+    get:
+      summary: Get product detail for admin
+      tags: [Admin Products]
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Product detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminProduct"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      summary: Update product
+      tags: [Admin Products]
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductPatchInput"
+      responses:
+        "200":
+          description: Product updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminProduct"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /admin/orders:
+    get:
+      summary: List orders
+      tags: [Admin Orders]
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - in: query
+          name: status
+          schema:
+            $ref: "#/components/schemas/OrderStatus"
+      responses:
+        "200":
+          description: Order list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderListResponse"
+
+  /admin/orders/{id}:
+    get:
+      summary: Get order detail
+      tags: [Admin Orders]
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Order detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /admin/orders/{id}/status:
+    patch:
+      summary: Update order status
+      tags: [Admin Orders]
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  $ref: "#/components/schemas/OrderStatus"
+      responses:
+        "200":
+          description: Order status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderStatusUpdateResponse"
+        "409":
+          description: Invalid status transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: admin_session
+
+  schemas:
+    StockStatus:
+      type: string
+      enum: [IN_STOCK, OUT_OF_STOCK]
+
+    OrderStatus:
+      type: string
+      enum: [NEW, PROCESSING, SHIPPING, COMPLETED, CANCELLED]
+
+    PaymentMethod:
+      type: string
+      enum: [COD]
+
+    Pagination:
+      type: object
+      required: [page, limit, totalItems, totalPages]
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalItems:
+          type: integer
+        totalPages:
+          type: integer
+
+    PublicProduct:
+      type: object
+      required: [id, name, price, stockQuantity, stockStatus, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        price:
+          type: integer
+          minimum: 1
+        imageUrl:
+          type: string
+          nullable: true
+        stockQuantity:
+          type: integer
+          minimum: 0
+        stockStatus:
+          $ref: "#/components/schemas/StockStatus"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AdminProduct:
+      allOf:
+        - $ref: "#/components/schemas/PublicProduct"
+        - type: object
+          required: [isVisible]
+          properties:
+            isVisible:
+              type: boolean
+
+    ProductInput:
+      type: object
+      required: [name, price, stockQuantity, isVisible]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        price:
+          type: integer
+          minimum: 1
+        imageUrl:
+          type: string
+          nullable: true
+        stockQuantity:
+          type: integer
+          minimum: 0
+        isVisible:
+          type: boolean
+
+    ProductPatchInput:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        price:
+          type: integer
+          minimum: 1
+        imageUrl:
+          type: string
+          nullable: true
+        stockQuantity:
+          type: integer
+          minimum: 0
+        isVisible:
+          type: boolean
+
+    ProductListResponse:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicProduct"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    AdminProductListResponse:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminProduct"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    CreateOrderRequest:
+      type: object
+      required: [customerName, customerPhone, shippingAddress, items]
+      properties:
+        customerName:
+          type: string
+        customerPhone:
+          type: string
+        customerEmail:
+          type: string
+          nullable: true
+        shippingAddress:
+          type: string
+        note:
+          type: string
+          nullable: true
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [productId, quantity]
+            properties:
+              productId:
+                type: string
+              quantity:
+                type: integer
+                minimum: 1
+
+    OrderItem:
+      type: object
+      required: [id, productId, productName, unitPrice, quantity, lineTotal]
+      properties:
+        id:
+          type: string
+        productId:
+          type: string
+        productName:
+          type: string
+        unitPrice:
+          type: integer
+        quantity:
+          type: integer
+        lineTotal:
+          type: integer
+
+    OrderDetail:
+      type: object
+      required:
+        - id
+        - customerName
+        - customerPhone
+        - shippingAddress
+        - totalAmount
+        - status
+        - statusLabel
+        - paymentMethod
+        - items
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        customerName:
+          type: string
+        customerPhone:
+          type: string
+        customerEmail:
+          type: string
+          nullable: true
+        shippingAddress:
+          type: string
+        note:
+          type: string
+          nullable: true
+        totalAmount:
+          type: integer
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        statusLabel:
+          type: string
+        paymentMethod:
+          $ref: "#/components/schemas/PaymentMethod"
+        stockRestoredAt:
+          type: string
+          format: date-time
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    OrderListItem:
+      type: object
+      required: [id, customerName, customerPhone, totalAmount, status, statusLabel, paymentMethod, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        customerName:
+          type: string
+        customerPhone:
+          type: string
+        totalAmount:
+          type: integer
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        statusLabel:
+          type: string
+        paymentMethod:
+          $ref: "#/components/schemas/PaymentMethod"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    OrderListResponse:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderListItem"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    OrderStatusUpdateResponse:
+      type: object
+      required: [id, status, statusLabel, updatedAt]
+      properties:
+        id:
+          type: string
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        statusLabel:
+          type: string
+        stockRestoredAt:
+          type: string
+          format: date-time
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+
+    AdminLoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AdminUser:
+      type: object
+      required: [id, email, role]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [ADMIN]
+
+    AdminMeResponse:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: "#/components/schemas/AdminUser"
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              nullable: true
+
+  responses:
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    Unauthenticated:
+      description: Unauthenticated
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+```
+
+---
+
+# 10. Các điểm cần PM xác nhận trước khi khóa API
+
+1. Có cần public endpoint để xem lại order success sau reload không?  
+   - Đề xuất MVP: không cần, dùng response sau khi tạo đơn hàng.
+2. ID dùng UUID string hay integer auto-increment?
+3. Backend stack/database cụ thể là gì?
+4. Auth admin dùng cookie session hay JWT?
+5. Có cho admin xóa sản phẩm không?  
+   - PRD không yêu cầu, contract hiện tại không có delete.
+6. Có cho hủy đơn ở trạng thái `SHIPPING` không?  
+   - Contract hiện tại không cho hủy khi đang giao.
+7. Khi sản phẩm bị hidden, đơn hàng cũ vẫn hiển thị bình thường trong admin nhờ snapshot. OK?
+8. Có cần endpoint upload ảnh không?  
+   - Contract hiện tại chỉ dùng URL ảnh.
+
+---
+
+# 11. Trạng thái contract
+
+```text
+Status: DRAFT
+Locked: No
+Owner: Technical Architecture & API Contract Agent
+```
+
+Sau khi PM xác nhận các điểm ở mục 10, contract có thể chuyển sang:
+
+```text
+Status: LOCKED
+```
+
+Khi đã lock, Frontend/Backend không tự ý đổi endpoint, payload hoặc status code nếu chưa có phê duyệt từ PM Orchestrator.

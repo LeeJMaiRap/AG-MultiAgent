@@ -96,6 +96,7 @@ class AgentInfo:
         self.messages: List[Dict[str, Any]] = []
         self.current_task: Optional[str] = None
         self.last_updated = datetime.now().isoformat()
+        self.is_cancelled = False
 
     def set_state(self, state: AgentState, task: Optional[str] = None):
         self.state = state
@@ -121,7 +122,8 @@ class AgentInfo:
             "current_task": self.current_task,
             "last_updated": self.last_updated,
             "message_count": len(self.messages),
-            "privileged": self.agent_id in PRIVILEGED_AGENTS
+            "privileged": self.agent_id in PRIVILEGED_AGENTS,
+            "is_cancelled": self.is_cancelled
         }
 
 
@@ -278,12 +280,34 @@ class OrchestratorRegistry:
             agent.set_state(AgentState.IDLE)
         self._notify("idle_all", {})
 
+    def is_pipeline_active(self) -> bool:
+        """Returns True if any pipeline agent is currently WORKING or PLANNING."""
+        pipeline_agents = ["pm-orchestrator", "product-agent", "architecture-agent", "frontend-agent", "backend-agent", "qa-agent"]
+        for aid in pipeline_agents:
+            if aid in self.agents and self.agents[aid].state in (AgentState.WORKING, AgentState.PLANNING):
+                return True
+        return False
+
+    def cancel_agent(self, agent_id: str):
+        if agent_id in self.agents:
+            self.agents[agent_id].is_cancelled = True
+            self.add_agent_message(agent_id, "system", f"Nhận lệnh huỷ (Tạm dừng) cho {agent_id}.", "status")
+
     def save_chat_history(self, project_name: str):
         import json
         from pathlib import Path
         self.current_project = project_name
-        project_dir = Path("storage/projects") / project_name
-        project_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Try to find existing project in any status folder
+        project_dir = None
+        for status in ["active", "archived", "on-hold"]:
+            p = BASE_DIR / "projects" / status / project_name
+            if p.exists():
+                project_dir = p
+                break
+        if not project_dir:
+            project_dir = BASE_DIR / "projects" / "active" / project_name
+            project_dir.mkdir(parents=True, exist_ok=True)
         
         # Gom tin nhắn của tất cả agent
         history = {agent_id: agent.messages for agent_id, agent in self.agents.items()}
@@ -296,7 +320,17 @@ class OrchestratorRegistry:
         import json
         from pathlib import Path
         self.current_project = project_name
-        project_dir = Path("storage/projects") / project_name
+        
+        project_dir = None
+        for status in ["active", "archived", "on-hold"]:
+            p = BASE_DIR / "projects" / status / project_name
+            if p.exists():
+                project_dir = p
+                break
+                
+        if not project_dir:
+            return False
+            
         history_file = project_dir / "chat_history.json"
         if not history_file.exists():
             return False
@@ -356,6 +390,9 @@ def run_agent(agent_name: str, task_desc: str, mock: bool = True,
     log(f"\n[Running: {agent_name.upper()} | model={model_name}]...", Colors.CYAN)
 
     prompt = load_prompt(agent_name)
+
+    # Reset cancellation state
+    registry.agents[agent_name].is_cancelled = False
 
     try:
         if mock:
@@ -530,9 +567,20 @@ def _real_output(agent_name, task_desc, prompt, model_name, tools):
                                     full_text += chunk_content
                                     # Stream character/words to Web UI in real-time
                                     registry.stream_agent_message(agent_name, "agent", full_text, "output")
+                                    
                             except Exception:
                                 pass
-                
+                                
+                        if registry.agents[agent_name].is_cancelled:
+                            registry.add_agent_message(agent_name, "system", "Đã ngắt quá trình sinh dữ liệu theo yêu cầu (Tạm dừng).", "status")
+                            finish_reason = "cancelled"
+                            break
+
+                # If cancelled, break outer continuation loop
+                if registry.agents[agent_name].is_cancelled:
+                    registry.finalize_stream_message(agent_name)
+                    break
+                    
                 # Check for continuation
                 is_unfinished_json_or_code = (
                     (finish_reason == "length") or

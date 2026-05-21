@@ -132,42 +132,62 @@ async def start_pipeline(body: dict):
     thread.start()
     return {"ok": True, "message": f"Pipeline started for '{project_name}'"}
 
+# ---------------------------------------------------------------------------
+# Project & File Explorer API (CRUD)
+# ---------------------------------------------------------------------------
+PROJECTS_ROOT = os.path.abspath(os.path.join(str(BASE_DIR), "projects"))
+
+def is_safe_path(target_path: str) -> bool:
+    abs_target = os.path.abspath(target_path)
+    return abs_target.startswith(PROJECTS_ROOT)
+
 @app.get("/api/projects/list")
 async def list_projects():
     import json
     from pathlib import Path
-    projects_dir = Path("storage/projects")
-    projects_dir.mkdir(parents=True, exist_ok=True)
     
     result = []
-    for item in projects_dir.iterdir():
-        if item.is_dir():
-            meta_file = item / "meta.json"
-            if meta_file.exists():
-                try:
-                    with open(meta_file, "r", encoding="utf-8") as f:
-                        meta = json.load(f)
-                    result.append(meta)
-                except Exception:
-                    result.append({
-                        "project_name": item.name,
-                        "created_at": datetime.now().isoformat(),
-                        "description": "Dự án cũ / Chưa có mô tả",
-                        "status": "Active"
-                    })
-            else:
-                meta = {
+    for status in ["active", "archived", "on-hold"]:
+        status_dir = Path(PROJECTS_ROOT) / status
+        status_dir.mkdir(parents=True, exist_ok=True)
+        
+        for item in status_dir.iterdir():
+            if item.is_dir():
+                meta_file = item / "meta.json"
+                meta_data = {
                     "project_name": item.name,
                     "created_at": datetime.now().isoformat(),
                     "description": "Dự án cũ / Chưa có mô tả",
-                    "status": "Active"
+                    "status": status.capitalize()
                 }
-                try:
-                    with open(meta_file, "w", encoding="utf-8") as f:
-                        json.dump(meta, f, ensure_ascii=False, indent=2)
-                except Exception:
-                    pass
-                result.append(meta)
+                if meta_file.exists():
+                    try:
+                        with open(meta_file, "r", encoding="utf-8") as f:
+                            loaded = json.load(f)
+                            meta_data.update(loaded)
+                            meta_data["status"] = status.capitalize() # Force match folder
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        with open(meta_file, "w", encoding="utf-8") as f:
+                            json.dump(meta_data, f, ensure_ascii=False, indent=2)
+                    except Exception:
+                        pass
+                
+                # List core files
+                core_files = []
+                for root, dirs, files in os.walk(str(item)):
+                    for file in files:
+                        full_path = os.path.join(root, file)
+                        rel_path = os.path.relpath(full_path, str(item))
+                        # Tạm loại trừ folder .git hoặc __pycache__
+                        if ".git" in rel_path or "__pycache__" in rel_path:
+                            continue
+                        core_files.append(rel_path.replace("\\", "/"))
+                
+                meta_data["files"] = core_files
+                result.append(meta_data)
     return result
 
 @app.post("/api/project/create")
@@ -177,7 +197,10 @@ async def create_project(body: dict):
     name = body.get("project_name", "").strip()
     description = body.get("description", "").strip() or "No description"
     status = body.get("status", "Active").strip()
-    
+    folder_status = status.lower()
+    if folder_status not in ["active", "archived", "on-hold"]:
+        folder_status = "active"
+        
     if not name:
         return {"error": "Project name is required"}
         
@@ -185,7 +208,7 @@ async def create_project(body: dict):
     if not safe_name:
         return {"error": "Invalid project name"}
         
-    project_dir = Path("storage/projects") / safe_name
+    project_dir = Path(PROJECTS_ROOT) / folder_status / safe_name
     project_dir.mkdir(parents=True, exist_ok=True)
     
     meta = {
@@ -225,6 +248,54 @@ async def save_project(body: dict):
     registry.save_chat_history(name)
     return {"ok": True, "message": f"Project '{name}' saved successfully"}
 
+@app.post("/api/file/read")
+async def read_file(body: dict):
+    file_path = body.get("path", "")
+    full_path = os.path.abspath(os.path.join(PROJECTS_ROOT, file_path))
+    if not is_safe_path(full_path):
+        return {"error": "403 Forbidden: Path traversal detected"}
+    if not os.path.exists(full_path):
+        return {"error": "File not found"}
+    try:
+        with open(full_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        return {"ok": True, "content": content}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.post("/api/file/write")
+async def write_file(body: dict):
+    file_path = body.get("path", "")
+    content = body.get("content", "")
+    if content.strip() == "" and not body.get("allow_empty", False):
+        return {"error": "Content is empty. Refused to overwrite."}
+        
+    full_path = os.path.abspath(os.path.join(PROJECTS_ROOT, file_path))
+    if not is_safe_path(full_path):
+        return {"error": "403 Forbidden: Path traversal detected"}
+        
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+    try:
+        with open(full_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return {"ok": True, "message": "File saved"}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.post("/api/file/delete")
+async def delete_file(body: dict):
+    file_path = body.get("path", "")
+    full_path = os.path.abspath(os.path.join(PROJECTS_ROOT, file_path))
+    if not is_safe_path(full_path):
+        return {"error": "403 Forbidden: Path traversal detected"}
+    try:
+        if os.path.exists(full_path):
+            os.remove(full_path)
+            return {"ok": True, "message": "File deleted"}
+        return {"error": "File not found"}
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.post("/api/pm/answer")
 async def answer_pm(body: dict):
     answer = body.get("answer", "").strip()
@@ -233,6 +304,11 @@ async def answer_pm(body: dict):
         
     set_pm_answer(answer)
     return {"ok": True, "message": "Answer forwarded to PM Agent"}
+
+@app.post("/api/agents/{agent_id}/cancel")
+async def cancel_agent(agent_id: str):
+    registry.cancel_agent(agent_id)
+    return {"ok": True, "message": "Cancel signal sent."}
 
 # ---------------------------------------------------------------------------
 # Asynchronous Chat Processing & Gemini API Handlers
@@ -260,6 +336,10 @@ def generate_streaming_chat(agent_id: str, system_prompt: str, user_text: str, t
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_text}
     ]
+    
+    # Reset cancellation state
+    if agent_id in registry.agents:
+        registry.agents[agent_id].is_cancelled = False
     
     max_retries = 3
     delay = 2
@@ -319,6 +399,14 @@ def generate_streaming_chat(agent_id: str, system_prompt: str, user_text: str, t
                                     registry.stream_agent_message(agent_id, "agent", full_text, "chat")
                             except Exception:
                                 pass
+                                
+                        if agent_id in registry.agents and registry.agents[agent_id].is_cancelled:
+                            registry.add_agent_message(agent_id, "system", "Đã ngắt quá trình sinh dữ liệu theo yêu cầu (Tạm dừng).", "status")
+                            finish_reason = "cancelled"
+                            break
+
+                if agent_id in registry.agents and registry.agents[agent_id].is_cancelled:
+                    break
                 
                 # Check for unfinished code blocks, brackets, etc.
                 is_unfinished = (
@@ -416,8 +504,27 @@ def process_chat(agent_id: str, text: str):
             )
             return
 
+        text_upper = text.upper()
+        if "UPDATE" in text_upper and registry.is_pipeline_active():
+            registry.add_agent_message("main-agent", "agent", "Đang chuyển tiếp bản cập nhật cho PM Agent...", "chat")
+            registry.add_agent_message("pm-orchestrator", "user", f"[REVISION UPDATE]: {text}", "chat")
+            return
+            
+        if "NEW" in text_upper and registry.is_pipeline_active():
+            registry.idle_all()
+            registry.add_agent_message("main-agent", "agent", "Đã dừng các agents. Vui lòng tạo dự án mới ở bảng điều khiển bên phải và gửi lại yêu cầu.", "chat")
+            return
+
         keywords = ["dự án", "xây dựng", "thiết kế", "tạo", "build", "create", "mvp", "app", "project", "lập trình"]
         if any(kw in text.lower() for kw in keywords):
+            if registry.is_pipeline_active():
+                registry.add_agent_message(
+                    "main-agent", "agent", 
+                    "⚠️ **[State Locked]** Tôi nhận thấy hệ thống đang chạy một dự án (Active). Đây là dự án mới (NEW) hay bản cập nhật (UPDATE) cho dự án hiện tại?\n\n* Nếu là **NEW**: Gõ 'NEW' để dừng dự án hiện tại và chuẩn bị tạo mới.\n* Nếu là **UPDATE**: Gõ 'UPDATE' kèm yêu cầu để tôi cập nhật cho PM Agent.", 
+                    "chat"
+                )
+                return
+                
             registry.add_agent_message(
                 "main-agent", "agent", 
                 f"Tôi đã nhận diện được yêu cầu dự án của bạn: '{text[:100]}...'. Đang chuyển tiếp cho PM Agent để lập kế hoạch...", 
@@ -426,7 +533,7 @@ def process_chat(agent_id: str, text: str):
             
             # Start pipeline in background
             def _run():
-                run_pipeline(text, "user-project", mock=GLOBAL_MOCK)
+                run_pipeline(text, registry.current_project, mock=GLOBAL_MOCK)
             thread = threading.Thread(target=_run, daemon=True)
             thread.start()
             return
@@ -1022,6 +1129,48 @@ body {
 }
 .qa-input-group button:hover { background: #5b54d6; }
 
+/* --- Tree View & Modal --- */
+.tree-file {
+    font-size: 11px;
+    color: var(--text-dim);
+    padding: 4px 8px;
+    margin-left: 10px;
+    cursor: pointer;
+    border-left: 1px solid var(--border);
+    transition: background 0.2s;
+    word-break: break-all;
+}
+.tree-file:hover { background: var(--surface2); color: var(--accent); }
+.tree-file::before { content: '📄 '; opacity: 0.7; }
+
+.modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.6); z-index: 1000;
+    display: none; align-items: center; justify-content: center;
+}
+.modal-content {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius); width: 80%; height: 85%;
+    display: flex; flex-direction: column; padding: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+.modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 10px;
+}
+.modal-header h3 { font-size: 14px; color: #fff; }
+.modal-body { flex: 1; display: flex; flex-direction: column; }
+.modal-body textarea {
+    flex: 1; background: var(--surface); color: var(--text);
+    font-family: 'Consolas', monospace; font-size: 13px; border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px; outline: none; resize: none;
+}
+.modal-footer {
+    display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;
+}
+.btn-danger { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+.btn-danger:hover { background: var(--red); color: #fff; }
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -1078,7 +1227,7 @@ body {
         
         <div class="chat-input-bar">
             <textarea id="chat-input" placeholder="Type a message to this agent..." rows="2" onkeydown="handleChatKey(event)"></textarea>
-            <button onclick="sendChat()">Send</button>
+            <button id="btn-send" onclick="sendChat()">Send</button>
         </div>
     </div>
 
@@ -1117,6 +1266,24 @@ body {
             <div id="project-list" style="overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
                 <!-- Projects rendered dynamically -->
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- CRUD Modal -->
+<div class="modal-overlay" id="file-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modal-filename">Tên File</h3>
+            <button class="btn" onclick="closeModal()">Đóng</button>
+        </div>
+        <div class="modal-body">
+            <textarea id="modal-editor" spellcheck="false"></textarea>
+            <input type="hidden" id="modal-filepath" />
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-danger" onclick="deleteFile()">Xóa File</button>
+            <button class="btn btn-primary" onclick="saveFile()">Lưu Thay Đổi</button>
         </div>
     </div>
 </div>
@@ -1213,7 +1380,28 @@ function handleEvent(msg) {
     else if (msg.event === 'idle_all') {
         agents.forEach(a => a.state = 'IDLE');
         renderTabs();
+        updateSendButton();
     }
+}
+
+function updateSendButton() {
+    const btn = document.getElementById('btn-send');
+    if (!activeAgent || !btn) return;
+    const a = agents.find(x => x.agent_id === activeAgent);
+    if (a && (a.state === 'WORKING' || a.state === 'PLANNING')) {
+        btn.textContent = 'Tạm dừng';
+        btn.style.background = 'var(--yellow)';
+        btn.onclick = cancelAgent;
+    } else {
+        btn.textContent = 'Send';
+        btn.style.background = '';
+        btn.onclick = sendChat;
+    }
+}
+
+function cancelAgent() {
+    if (!activeAgent) return;
+    fetch(`/api/agents/${activeAgent}/cancel`, { method: 'POST' });
 }
 
 function renderTabs() {
@@ -1227,6 +1415,7 @@ function renderTabs() {
             <span class="state-label">${a.state}</span>
         </div>
     `).join('');
+    updateSendButton();
 }
 
 function selectAgent(id) {
@@ -1245,6 +1434,9 @@ function selectAgent(id) {
         perm.className = 'permission-badge';
         perm.innerHTML = '&#128274; Restricted (no system commands)';
     }
+    
+    document.getElementById('messages').innerHTML = ''; // clear for new agent
+    
     // Fetch messages from API if we have none cached
     if (!agentMessages[id] || agentMessages[id].length === 0) {
         fetch(`/api/agents/${id}/messages`).then(r=>r.json()).then(msgs => {
@@ -1265,17 +1457,39 @@ function selectAgent(id) {
 function renderMessages() {
     const container = document.getElementById('messages');
     const msgs = agentMessages[activeAgent] || [];
-    // Use requestAnimationFrame for smoother updates
+    
     requestAnimationFrame(() => {
-        container.innerHTML = msgs.map(m => {
+        const existingIds = new Set();
+        Array.from(container.children).forEach(child => existingIds.add(child.id));
+        
+        msgs.forEach((m, i) => {
+            const msgId = `msg-${activeAgent}-${i}`;
             const cls = m.type === 'error' ? 'error' : m.role;
             const time = m.ts ? new Date(m.ts).toLocaleTimeString() : '';
             const htmlContent = (typeof marked !== 'undefined') ? marked.parse(m.text || '') : escapeHtml(m.text || '');
-            return `<div class="msg ${cls}">
-                ${htmlContent}
-                <div class="meta">${m.role} &middot; ${time}</div>
-            </div>`;
-        }).join('');
+            
+            let node = document.getElementById(msgId);
+            if (!node) {
+                node = document.createElement('div');
+                node.id = msgId;
+                node.className = `msg ${cls}`;
+                container.appendChild(node);
+            }
+            
+            const innerHTML = `${htmlContent}<div class="meta">${m.role} &middot; ${time}</div>`;
+            
+            if (node.innerHTML !== innerHTML) {
+                node.innerHTML = innerHTML;
+            }
+            existingIds.delete(msgId);
+        });
+        
+        existingIds.forEach(id => {
+            const n = document.getElementById(id);
+            if (n) n.remove();
+        });
+        
+        // Auto-scroll only if we are at bottom or new message arrived
         container.scrollTop = container.scrollHeight;
         checkQaBridge();
     });
@@ -1350,6 +1564,16 @@ async function loadProjects() {
                 const dateStr = p.created_at ? new Date(p.created_at).toLocaleDateString('vi-VN', {
                     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
                 }) : '';
+                let filesHtml = '';
+                if (p.files && p.files.length > 0) {
+                    filesHtml = `<div style="margin-top: 8px;">`;
+                    p.files.forEach(file => {
+                        const relPath = `${status.toLowerCase()}/${p.project_name}/${file}`;
+                        filesHtml += `<div class="tree-file" onclick="openFile(event, '${relPath}')">${file}</div>`;
+                    });
+                    filesHtml += `</div>`;
+                }
+
                 html += `
                     <div class="project-card ${isActive}" onclick="loadProject('${p.project_name}')">
                         <div class="card-header">
@@ -1358,6 +1582,7 @@ async function loadProjects() {
                         </div>
                         <div class="proj-desc">${escapeHtml(p.description || '')}</div>
                         <div class="proj-meta">${dateStr}</div>
+                        ${filesHtml}
                     </div>
                 `;
             });
@@ -1365,6 +1590,79 @@ async function loadProjects() {
         listContainer.innerHTML = html || '<div style="font-size:11px; color:var(--text-dim); text-align:center; padding:12px;">Chưa có dự án nào</div>';
     } catch (e) {
         console.error('Failed to load projects:', e);
+    }
+}
+
+async function openFile(event, path) {
+    if (event) event.stopPropagation();
+    try {
+        const res = await fetch('/api/file/read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: path })
+        });
+        const data = await res.json();
+        if (data.error) {
+            alert('Lỗi: ' + data.error);
+            return;
+        }
+        document.getElementById('modal-filename').textContent = path.split('/').pop();
+        document.getElementById('modal-filepath').value = path;
+        document.getElementById('modal-editor').value = data.content || '';
+        document.getElementById('file-modal').style.display = 'flex';
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+function closeModal() {
+    document.getElementById('file-modal').style.display = 'none';
+}
+
+async function saveFile() {
+    const path = document.getElementById('modal-filepath').value;
+    const content = document.getElementById('modal-editor').value;
+    if (!path) return;
+    
+    try {
+        const res = await fetch('/api/file/write', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: path, content: content, allow_empty: true })
+        });
+        const data = await res.json();
+        if (data.error) {
+            alert('Lỗi: ' + data.error);
+        } else {
+            alert('Lưu thành công!');
+            closeModal();
+            loadProjects();
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+async function deleteFile() {
+    const path = document.getElementById('modal-filepath').value;
+    if (!path) return;
+    if (!confirm('Bạn có chắc muốn xóa file này?')) return;
+    
+    try {
+        const res = await fetch('/api/file/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: path })
+        });
+        const data = await res.json();
+        if (data.error) {
+            alert('Lỗi: ' + data.error);
+        } else {
+            closeModal();
+            loadProjects();
+        }
+    } catch (e) {
+        console.error(e);
     }
 }
 
