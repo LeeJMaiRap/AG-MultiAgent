@@ -141,13 +141,13 @@ class OrchestratorRegistry:
 
     def _register_default_agents(self):
         defaults = [
-            ("main-agent", "Agent Chính (AG2.0)", "Primary AI Assistant & Coordinator", "9router/gemini-2.5-pro"),
-            ("pm-orchestrator", "PM Agent", "Orchestrator / Project Manager", "9router/gemini-2.5-pro"),
-            ("product-agent", "Product Agent", "Requirements & PRD", "9router/gemini-2.5-flash"),
-            ("architecture-agent", "Architecture Agent", "System Design & API", "9router/gemini-2.5-flash"),
-            ("frontend-agent", "Frontend Agent", "UI / Frontend Code", "9router/gemini-2.5-flash"),
-            ("backend-agent", "Backend Agent", "Backend Logic", "9router/gemini-2.5-flash"),
-            ("qa-agent", "QA Agent", "Testing & Quality", "9router/gemini-2.5-flash"),
+            ("main-agent", "Agent Chính (AG2.0)", "Primary AI Assistant & Coordinator", "cx/gpt-5.5"),
+            ("pm-orchestrator", "PM Agent", "Orchestrator / Project Manager", "cx/gpt-5.5"),
+            ("product-agent", "Product Agent", "Requirements & PRD", "cx/gpt-5.5"),
+            ("architecture-agent", "Architecture Agent", "System Design & API", "cx/gpt-5.5"),
+            ("frontend-agent", "Frontend Agent", "UI / Frontend Code", "cx/gpt-5.5"),
+            ("backend-agent", "Backend Agent", "Backend Logic", "cx/gpt-5.5"),
+            ("qa-agent", "QA Agent", "Testing & Quality", "cx/gpt-5.5"),
         ]
         for aid, name, role, model in defaults:
             self.agents[aid] = AgentInfo(aid, name, role, model)
@@ -277,16 +277,14 @@ def _mock_output(agent_name: str, task_desc: str) -> str:
 def _real_output(agent_name, task_desc, prompt, model_name, tools):
     from openai import OpenAI
     import traceback
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("Missing GEMINI_API_KEY (9Router API Key)")
-    # Strip 9router/ prefix for the API call model id
-    actual_model = model_name.replace("9router/", "") if model_name.startswith("9router/") else model_name
+    api_key = os.environ.get("GEMINI_API_KEY") or "sk-4f6baca69c3b82dc-64fo64-dcad0a8b"
+    base_url = "https://codex-khanhnguyen.indevs.in/v1"
+    actual_model = "cx/gpt-5.5"
     
-    print(f"[9Router DEBUG] Agent: {agent_name} | Target Model: {actual_model} | Base URL: https://api.9router.com/v1")
+    print(f"[Codex Gateway DEBUG] Agent: {agent_name} | Target Model: {actual_model} | Base URL: {base_url}")
     
     try:
-        client = OpenAI(base_url="https://api.9router.com/v1", api_key=api_key)
+        client = OpenAI(base_url=base_url, api_key=api_key)
         messages = [
             {"role": "system", "content": prompt},
             {"role": "user", "content": task_desc}
@@ -298,7 +296,7 @@ def _real_output(agent_name, task_desc, prompt, model_name, tools):
         )
         return resp.choices[0].message.content
     except Exception as e:
-        print(f"[9Router ERROR DEBUG] Model: {actual_model} | Exception Type: {type(e)} | Msg: {e}")
+        print(f"[Codex Gateway ERROR DEBUG] Model: {actual_model} | Exception Type: {type(e)} | Msg: {e}")
         traceback.print_exc()
         
         err_detail = ""
@@ -309,7 +307,7 @@ def _real_output(agent_name, task_desc, prompt, model_name, tools):
         elif hasattr(e, "body"):
             err_detail += f" | Body: {e.body}"
             
-        raise RuntimeError(f"9Router API Error: {e}{err_detail}")
+        raise RuntimeError(f"Codex Gateway API Error: {e}{err_detail}")
 
 
 def _output_file_for(agent_name: str) -> Optional[str]:

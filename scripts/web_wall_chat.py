@@ -174,16 +174,16 @@ def process_chat(agent_id: str, text: str):
             try:
                 from openai import OpenAI
                 import traceback
-                api_key = os.environ.get("GEMINI_API_KEY")
-                if not api_key:
-                    raise ValueError("Missing GEMINI_API_KEY (9Router API Key)")
+                api_key = os.environ.get("GEMINI_API_KEY") or "sk-4f6baca69c3b82dc-64fo64-dcad0a8b"
+                base_url = "https://codex-khanhnguyen.indevs.in/v1"
+                actual_model = "cx/gpt-5.5"
                 
-                print(f"[9Router DEBUG] Agent: main-agent | Model: gemini-2.5-pro | Base URL: https://api.9router.com/v1")
+                print(f"[Codex Gateway DEBUG] Agent: main-agent | Model: {actual_model} | Base URL: {base_url}")
                 
-                client = OpenAI(base_url="https://api.9router.com/v1", api_key=api_key)
+                client = OpenAI(base_url=base_url, api_key=api_key)
                 system_prompt = "Bạn là Agent Chính (AG2.0), trợ lý AI điều phối chính của hệ thống MTA. Hãy trò chuyện thân thiện, chuyên nghiệp hoàn toàn bằng tiếng Việt. Nếu người dùng đưa ra yêu cầu dự án, hãy khuyên họ nhập chi tiết để bạn chuyển tiếp cho PM Agent."
                 resp = client.chat.completions.create(
-                    model="gemini-2.5-pro",
+                    model=actual_model,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": text}
@@ -192,7 +192,7 @@ def process_chat(agent_id: str, text: str):
                 )
                 reply = resp.choices[0].message.content
             except Exception as e:
-                print(f"[9Router ERROR DEBUG] main-agent | Exception Type: {type(e)} | Msg: {e}")
+                print(f"[Codex Gateway ERROR DEBUG] main-agent | Exception Type: {type(e)} | Msg: {e}")
                 traceback.print_exc()
                 
                 err_detail = ""
@@ -203,7 +203,7 @@ def process_chat(agent_id: str, text: str):
                 elif hasattr(e, "body"):
                     err_detail += f" | Body: {e.body}"
                     
-                reply = f"Lỗi kết nối 9Router API (Live Mode): {e}{err_detail}. Hãy kiểm tra GEMINI_API_KEY hoặc thử lại với Mock Mode."
+                reply = f"Lỗi kết nối Codex Gateway (Live Mode): {e}{err_detail}. Hãy kiểm tra GEMINI_API_KEY hoặc thử lại với Mock Mode."
         registry.add_agent_message("main-agent", "agent", reply, "chat")
         registry.set_agent_state("main-agent", AgentState.IDLE)
         return
@@ -229,15 +229,13 @@ def process_chat(agent_id: str, text: str):
             prompt = prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else "Bạn là một AI Agent trong hệ thống Multi-Agent."
             from openai import OpenAI
             import traceback
-            api_key = os.environ.get("GEMINI_API_KEY")
-            if not api_key:
-                raise ValueError("Missing GEMINI_API_KEY (9Router API Key)")
-            client = OpenAI(base_url="https://api.9router.com/v1", api_key=api_key)
-            model_name = registry.agents[agent_id].model
-            actual_model = model_name.replace("9router/", "") if model_name.startswith("9router/") else model_name
+            api_key = os.environ.get("GEMINI_API_KEY") or "sk-4f6baca69c3b82dc-64fo64-dcad0a8b"
+            base_url = "https://codex-khanhnguyen.indevs.in/v1"
+            actual_model = "cx/gpt-5.5"
             
-            print(f"[9Router DEBUG] Agent: {agent_id} | Model: {actual_model} | Base URL: https://api.9router.com/v1")
+            print(f"[Codex Gateway DEBUG] Agent: {agent_id} | Model: {actual_model} | Base URL: {base_url}")
             
+            client = OpenAI(base_url=base_url, api_key=api_key)
             resp = client.chat.completions.create(
                 model=actual_model,
                 messages=[
@@ -248,7 +246,7 @@ def process_chat(agent_id: str, text: str):
             )
             reply = resp.choices[0].message.content
         except Exception as e:
-            print(f"[9Router ERROR DEBUG] {agent_id} | Exception Type: {type(e)} | Msg: {e}")
+            print(f"[Codex Gateway ERROR DEBUG] {agent_id} | Exception Type: {type(e)} | Msg: {e}")
             traceback.print_exc()
             
             err_detail = ""
@@ -259,7 +257,7 @@ def process_chat(agent_id: str, text: str):
             elif hasattr(e, "body"):
                 err_detail += f" | Body: {e.body}"
                 
-            reply = f"Lỗi kết nối 9Router API cho {agent_id} (Live Mode): {e}{err_detail}."
+            reply = f"Lỗi kết nối Codex Gateway cho {agent_id} (Live Mode): {e}{err_detail}."
             
     registry.add_agent_message(agent_id, "agent", reply, "chat")
     registry.set_agent_state(agent_id, AgentState.IDLE)
@@ -610,7 +608,7 @@ body {
     <input type="text" id="project-input" placeholder="Project name" value="web-project" style="max-width:150px" />
     <select id="mode-select" class="btn" style="background: var(--surface2); color: var(--text); border: 1px solid var(--border); outline: none; padding: 8px 12px; border-radius: 8px; font-weight: 500; cursor: pointer;">
         <option value="mock" selected>🤖 Mock Mode (Simulation)</option>
-        <option value="live">&#9889; Live Mode (9Router API)</option>
+        <option value="live">&#9889; Live Mode (Codex Gateway)</option>
     </select>
     <button class="btn btn-primary" onclick="startPipeline()">&#9654; Run Pipeline</button>
 </div>
@@ -625,7 +623,7 @@ body {
             <div class="agent-avatar" id="chat-avatar">AC</div>
             <div class="info">
                 <h3 id="chat-agent-name">Agent Ch&#237;nh (AG2.0)</h3>
-                <p id="chat-agent-role">Primary AI Assistant &amp; Coordinator | 9router/gemini-2.5-pro</p>
+                <p id="chat-agent-role">Primary AI Assistant &amp; Coordinator | cx/gpt-5.5</p>
             </div>
             <span id="chat-permission" class="permission-badge safe">&#128275; Full Access</span>
         </div>
