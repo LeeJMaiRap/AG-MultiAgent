@@ -32,7 +32,7 @@ from fastapi.responses import HTMLResponse
 import uvicorn
 
 # Import orchestrator registry and pipeline
-from orchestrate import OrchestratorRegistry, AgentState, run_pipeline, check_permission, steer_agent_pipeline
+from orchestrate import OrchestratorRegistry, AgentState, run_pipeline, check_permission, steer_agent_pipeline, set_pm_answer
 
 # ---------------------------------------------------------------------------
 # App Setup
@@ -123,12 +123,116 @@ async def start_pipeline(body: dict):
     if not brief:
         return {"error": "brief is required"}
 
+    registry.current_project = project_name
+
     def _run():
         run_pipeline(brief, project_name, mock=GLOBAL_MOCK)
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
     return {"ok": True, "message": f"Pipeline started for '{project_name}'"}
+
+@app.get("/api/projects/list")
+async def list_projects():
+    import json
+    from pathlib import Path
+    projects_dir = Path("storage/projects")
+    projects_dir.mkdir(parents=True, exist_ok=True)
+    
+    result = []
+    for item in projects_dir.iterdir():
+        if item.is_dir():
+            meta_file = item / "meta.json"
+            if meta_file.exists():
+                try:
+                    with open(meta_file, "r", encoding="utf-8") as f:
+                        meta = json.load(f)
+                    result.append(meta)
+                except Exception:
+                    result.append({
+                        "project_name": item.name,
+                        "created_at": datetime.now().isoformat(),
+                        "description": "Dự án cũ / Chưa có mô tả",
+                        "status": "Active"
+                    })
+            else:
+                meta = {
+                    "project_name": item.name,
+                    "created_at": datetime.now().isoformat(),
+                    "description": "Dự án cũ / Chưa có mô tả",
+                    "status": "Active"
+                }
+                try:
+                    with open(meta_file, "w", encoding="utf-8") as f:
+                        json.dump(meta, f, ensure_ascii=False, indent=2)
+                except Exception:
+                    pass
+                result.append(meta)
+    return result
+
+@app.post("/api/project/create")
+async def create_project(body: dict):
+    import json
+    from pathlib import Path
+    name = body.get("project_name", "").strip()
+    description = body.get("description", "").strip() or "No description"
+    status = body.get("status", "Active").strip()
+    
+    if not name:
+        return {"error": "Project name is required"}
+        
+    safe_name = "".join(c for c in name if c.isalnum() or c in "-_").strip()
+    if not safe_name:
+        return {"error": "Invalid project name"}
+        
+    project_dir = Path("storage/projects") / safe_name
+    project_dir.mkdir(parents=True, exist_ok=True)
+    
+    meta = {
+        "project_name": safe_name,
+        "created_at": datetime.now().isoformat(),
+        "description": description,
+        "status": status
+    }
+    
+    with open(project_dir / "meta.json", "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+        
+    with open(project_dir / "chat_history.json", "w", encoding="utf-8") as f:
+        json.dump({}, f, ensure_ascii=False, indent=2)
+        
+    registry.clear_all_messages()
+    registry.current_project = safe_name
+    return {"ok": True, "project": meta}
+
+@app.get("/api/project/load")
+async def load_project(name: str):
+    name = name.strip()
+    if not name:
+        return {"error": "Project name is required"}
+    
+    ok = registry.load_chat_history(name)
+    if not ok:
+        return {"error": f"Failed to load project '{name}'"}
+    return {"ok": True, "message": f"Project '{name}' chat history loaded successfully"}
+
+@app.post("/api/project/save")
+async def save_project(body: dict):
+    name = body.get("project_name", "").strip()
+    if not name:
+        return {"error": "Project name is required"}
+        
+    registry.save_chat_history(name)
+    return {"ok": True, "message": f"Project '{name}' saved successfully"}
+
+@app.post("/api/pm/answer")
+async def answer_pm(body: dict):
+    answer = body.get("answer", "").strip()
+    if not answer:
+        return {"error": "Empty answer"}
+        
+    set_pm_answer(answer)
+    return {"ok": True, "message": "Answer forwarded to PM Agent"}
 
 # ---------------------------------------------------------------------------
 # Asynchronous Chat Processing & Gemini API Handlers
@@ -351,7 +455,7 @@ def process_chat(agent_id: str, text: str):
         mock_responses = {
             "pm-orchestrator": "Tôi là PM Agent. Tôi chịu trách nhiệm lập kế hoạch dự án, phân rã nhiệm vụ và điều phối toàn bộ Web-Team hoạt động song song.",
             "product-agent": "Tôi là Product Agent. Tôi chuyên phân tích yêu cầu từ bản mô tả brief của khách hàng để xuất ra tài liệu PRD hoàn chỉnh.",
-            "architecture-agent": "Tôi là Architecture Agent. Tôi chịu trách nhiệm thiết kế cấu trúc thư mục, định nghĩa API contract và sơ đồ dữ liệu cho dự án.",
+            "architecture-agent": "Tôi là Architecture Agent. Tôi chuyên thiết kế cấu trúc thư mục, định nghĩa API contract và sơ đồ dữ liệu cho dự án.",
             "frontend-agent": "Tôi là Frontend Agent. Tôi tạo ra giao diện người dùng đẹp mắt, responsive và áp dụng các hiệu ứng chuyển động mượt mà.",
             "backend-agent": "Tôi là Backend Agent. Tôi phụ trách xây dựng cơ sở dữ liệu, viết logic nghiệp vụ xử lý API và tích hợp với Frontend.",
             "qa-agent": "Tôi là QA Agent. Tôi tự động thiết lập bộ test case, chạy thử nghiệm hệ thống và rà soát lỗi bảo mật trước khi bàn giao dự án."
@@ -381,10 +485,11 @@ def process_chat_in_thread(agent_id: str, text: str):
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await manager.connect(ws)
-    # Send initial state
+    # Send initial state including the current project name
     await ws.send_text(json.dumps({
         "event": "init",
-        "agents": registry.get_all_states()
+        "agents": registry.get_all_states(),
+        "current_project": registry.current_project
     }, ensure_ascii=False))
     try:
         while True:
@@ -506,14 +611,14 @@ body {
 }
 .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 16px var(--accent-glow); }
 
-/* --- Main Layout --- */
+/* --- Main Layout (3-Column) --- */
 .main {
     display: flex;
     flex: 1;
     overflow: hidden;
 }
 
-/* --- Agent Tabs Sidebar --- */
+/* --- Agent Tabs Sidebar (Left) --- */
 .sidebar {
     width: 240px;
     background: var(--surface);
@@ -565,12 +670,13 @@ body {
     letter-spacing: 0.5px;
 }
 
-/* --- Chat Panel --- */
+/* --- Chat Panel (Center) --- */
 .chat-panel {
     flex: 1;
     display: flex;
     flex-direction: column;
     background: var(--bg);
+    overflow: hidden;
 }
 .chat-header {
     padding: 14px 20px;
@@ -692,8 +798,9 @@ body {
     padding: 12px 20px;
     border-top: 1px solid var(--border);
     background: var(--surface);
+    flex-shrink: 0;
 }
-.chat-input-bar input {
+.chat-input-bar textarea {
     flex: 1;
     background: var(--surface2);
     border: 1px solid var(--border);
@@ -702,8 +809,9 @@ body {
     color: var(--text);
     font-size: 13px;
     outline: none;
+    resize: none;
 }
-.chat-input-bar input:focus { border-color: var(--accent); }
+.chat-input-bar textarea:focus { border-color: var(--accent); }
 .chat-input-bar button {
     padding: 10px 20px;
     background: linear-gradient(135deg, var(--accent), #8b5cf6);
@@ -734,6 +842,185 @@ body {
     color: var(--green);
     border-color: rgba(34, 197, 94, 0.2);
 }
+
+/* --- Project Panel (Right Sidebar) --- */
+.project-panel {
+    width: 320px;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    flex-shrink: 0;
+    padding: 16px;
+    gap: 16px;
+}
+.panel-section {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.panel-section h3 {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.form-group label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.form-group input, .form-group select, .form-group textarea {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: var(--text);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    border-color: var(--accent);
+}
+.project-list-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-top: 10px;
+    margin-bottom: 4px;
+}
+.project-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.project-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-1px);
+}
+.project-card.active-project {
+    border-color: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+}
+.project-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.project-card .proj-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+}
+.project-card .proj-desc {
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.project-card .proj-meta {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 2px;
+}
+.status-badge {
+    font-size: 8px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+.status-badge.active { background: rgba(34, 197, 94, 0.15); color: var(--green); }
+.status-badge.archived { background: rgba(255, 255, 255, 0.1); color: var(--text-dim); }
+.status-badge.on-hold { background: rgba(234, 179, 8, 0.15); color: var(--yellow); }
+
+/* --- Q&A Bridge Banner --- */
+.qa-bridge-banner {
+    background: linear-gradient(135deg, rgba(108, 99, 255, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 14px;
+    margin: 16px 20px 0;
+    animation: slideDown 0.3s ease;
+    flex-shrink: 0;
+}
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.qa-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 12px;
+    color: #fff;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.qa-question {
+    font-size: 12.5px;
+    line-height: 1.4;
+    margin-bottom: 10px;
+    color: var(--text);
+}
+.qa-input-group {
+    display: flex;
+    gap: 8px;
+}
+.qa-input-group input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-size: 12px;
+    outline: none;
+}
+.qa-input-group input:focus { border-color: var(--accent); }
+.qa-input-group button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-weight: 600;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.qa-input-group button:hover { background: #5b54d6; }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
@@ -766,19 +1053,70 @@ body {
         <div class="sidebar-title">Agent Rooms</div>
         <div id="agent-tabs"></div>
     </div>
+    
     <div class="chat-panel">
         <div class="chat-header" id="chat-header">
             <div class="agent-avatar" id="chat-avatar">AC</div>
             <div class="info">
-                <h3 id="chat-agent-name">Agent Ch&#237;nh (AG2.0)</h3>
+                <h3 id="chat-agent-name">Agent Chính (AG2.0)</h3>
                 <p id="chat-agent-role">Primary AI Assistant &amp; Coordinator | cx/gpt-5.5</p>
             </div>
             <span id="chat-permission" class="permission-badge safe">&#128275; Full Access</span>
         </div>
+        
+        <!-- Q&A Bridge Panel -->
+        <div id="qa-bridge-banner" class="qa-bridge-banner" style="display: none;">
+            <div class="qa-header">❓ Q&A Bridge - PM Agent cần làm rõ</div>
+            <div id="qa-question-text" class="qa-question">PM Agent is asking a question...</div>
+            <div class="qa-input-group">
+                <input type="text" id="qa-answer-input" placeholder="Nhập câu trả lời của bạn..." onkeydown="handleQaKey(event)" />
+                <button onclick="submitPmAnswer()">Gửi phản hồi</button>
+            </div>
+        </div>
+
         <div class="messages" id="messages"></div>
+        
         <div class="chat-input-bar">
             <textarea id="chat-input" placeholder="Type a message to this agent..." rows="2" onkeydown="handleChatKey(event)"></textarea>
             <button onclick="sendChat()">Send</button>
+        </div>
+    </div>
+
+    <!-- Project Panel (Right Sidebar) -->
+    <div class="project-panel">
+        <div class="panel-section">
+            <h3>&#128193; Dự án hiện tại</h3>
+            <div class="form-group" style="gap: 4px;">
+                <span id="current-project-badge" style="font-weight: 700; color: var(--accent); font-size: 14px;">web-project</span>
+            </div>
+        </div>
+        
+        <div class="panel-section">
+            <h3>&#10133; Tạo dự án mới</h3>
+            <div class="form-group">
+                <label for="new-project-name">Tên dự án</label>
+                <input type="text" id="new-project-name" placeholder="Ví dụ: my-cool-app" />
+            </div>
+            <div class="form-group">
+                <label for="new-project-desc">Mô tả ngắn</label>
+                <textarea id="new-project-desc" placeholder="Tóm tắt yêu cầu dự án..." rows="2"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="new-project-status">Trạng thái</label>
+                <select id="new-project-status">
+                    <option value="Active">Active</option>
+                    <option value="On-Hold">On-Hold</option>
+                    <option value="Archived">Archived</option>
+                </select>
+            </div>
+            <button class="btn btn-primary" onclick="createNewProject()" style="width: 100%; padding: 8px;">Tạo dự án</button>
+        </div>
+        
+        <div class="panel-section" style="flex: 1; min-height: 220px; display: flex; flex-direction: column; overflow: hidden;">
+            <h3>&#128203; Danh sách dự án</h3>
+            <div id="project-list" style="overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
+                <!-- Projects rendered dynamically -->
+            </div>
         </div>
     </div>
 </div>
@@ -789,6 +1127,7 @@ let ws;
 let agents = [];
 let activeAgent = null;
 let agentMessages = {};
+let currentProject = 'web-project';
 
 function connect() {
     ws = new WebSocket(WS_URL);
@@ -808,11 +1147,16 @@ function connect() {
 function handleEvent(msg) {
     if (msg.event === 'init') {
         agents = msg.agents;
+        currentProject = msg.current_project || 'web-project';
+        document.getElementById('current-project-badge').textContent = currentProject;
+        document.getElementById('project-input').value = currentProject;
+        
         agents.forEach(a => {
             if (!agentMessages[a.agent_id]) agentMessages[a.agent_id] = [];
         });
         renderTabs();
         if (!activeAgent && agents.length > 0) selectAgent(agents[0].agent_id);
+        loadProjects();
     }
     else if (msg.event === 'state_change') {
         const a = agents.find(x => x.agent_id === msg.agent_id);
@@ -933,6 +1277,7 @@ function renderMessages() {
             </div>`;
         }).join('');
         container.scrollTop = container.scrollHeight;
+        checkQaBridge();
     });
 }
 
@@ -972,6 +1317,158 @@ function startPipeline() {
             alert(res.error || 'Failed to start pipeline');
         }
     });
+}
+
+async function loadProjects() {
+    try {
+        const resp = await fetch('/api/projects/list');
+        const projects = await resp.json();
+        const listContainer = document.getElementById('project-list');
+        listContainer.innerHTML = '';
+        
+        const groups = {
+            'Active': [],
+            'On-Hold': [],
+            'Archived': []
+        };
+        
+        projects.forEach(p => {
+            const status = p.status || 'Active';
+            if (groups[status]) {
+                groups[status].push(p);
+            } else {
+                groups['Active'].push(p);
+            }
+        });
+        
+        let html = '';
+        for (const [status, list] of Object.entries(groups)) {
+            if (list.length === 0) continue;
+            html += `<div class="project-list-title">${status}</div>`;
+            list.forEach(p => {
+                const isActive = p.project_name === currentProject ? 'active-project' : '';
+                const dateStr = p.created_at ? new Date(p.created_at).toLocaleDateString('vi-VN', {
+                    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                }) : '';
+                html += `
+                    <div class="project-card ${isActive}" onclick="loadProject('${p.project_name}')">
+                        <div class="card-header">
+                            <span class="proj-name">${p.project_name}</span>
+                            <span class="status-badge ${status.toLowerCase()}">${status}</span>
+                        </div>
+                        <div class="proj-desc">${escapeHtml(p.description || '')}</div>
+                        <div class="proj-meta">${dateStr}</div>
+                    </div>
+                `;
+            });
+        }
+        listContainer.innerHTML = html || '<div style="font-size:11px; color:var(--text-dim); text-align:center; padding:12px;">Chưa có dự án nào</div>';
+    } catch (e) {
+        console.error('Failed to load projects:', e);
+    }
+}
+
+async function createNewProject() {
+    const nameInput = document.getElementById('new-project-name');
+    const descInput = document.getElementById('new-project-desc');
+    const statusSelect = document.getElementById('new-project-status');
+    
+    const name = nameInput.value.trim();
+    const desc = descInput.value.trim();
+    const status = statusSelect.value;
+    
+    if (!name) {
+        alert('Vui lòng nhập tên dự án.');
+        return;
+    }
+    
+    try {
+        const resp = await fetch('/api/project/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ project_name: name, description: desc, status: status })
+        });
+        const data = await resp.json();
+        if (data.error) {
+            alert('Lỗi: ' + data.error);
+            return;
+        }
+        nameInput.value = '';
+        descInput.value = '';
+        
+        currentProject = data.project.project_name;
+        document.getElementById('current-project-badge').textContent = currentProject;
+        document.getElementById('project-input').value = currentProject;
+        
+        agentMessages = {};
+        selectAgent(activeAgent || 'main-agent');
+        await loadProjects();
+    } catch (e) {
+        console.error('Failed to create project:', e);
+    }
+}
+
+async function loadProject(name) {
+    try {
+        const resp = await fetch(`/api/project/load?name=${name}`);
+        const data = await resp.json();
+        if (data.error) {
+            alert('Lỗi: ' + data.error);
+            return;
+        }
+        currentProject = name;
+        document.getElementById('current-project-badge').textContent = currentProject;
+        document.getElementById('project-input').value = currentProject;
+        
+        agentMessages = {};
+        selectAgent(activeAgent || 'main-agent');
+        await loadProjects();
+    } catch (e) {
+        console.error('Failed to load project:', e);
+    }
+}
+
+async function submitPmAnswer() {
+    const input = document.getElementById('qa-answer-input');
+    const answer = input.value.trim();
+    if (!answer) return;
+    
+    try {
+        const resp = await fetch('/api/pm/answer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ answer: answer })
+        });
+        const data = await resp.json();
+        if (data.error) {
+            alert('Lỗi: ' + data.error);
+            return;
+        }
+        input.value = '';
+        document.getElementById('qa-bridge-banner').style.display = 'none';
+    } catch (e) {
+        console.error('Failed to submit answer:', e);
+    }
+}
+
+function handleQaKey(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        submitPmAnswer();
+    }
+}
+
+function checkQaBridge() {
+    const pmMsgs = agentMessages['pm-orchestrator'] || [];
+    const lastMsg = pmMsgs[pmMsgs.length - 1];
+    const banner = document.getElementById('qa-bridge-banner');
+    if (lastMsg && lastMsg.role === 'agent' && lastMsg.text && lastMsg.text.includes('[PM_REQUEST]')) {
+        const question = lastMsg.text.replace('[PM_REQUEST]', '').trim();
+        document.getElementById('qa-question-text').textContent = question;
+        banner.style.display = 'block';
+    } else {
+        banner.style.display = 'none';
+    }
 }
 
 function escapeHtml(str) {

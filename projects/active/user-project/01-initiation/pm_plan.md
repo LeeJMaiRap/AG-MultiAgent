@@ -1,265 +1,191 @@
-## Phân tích brief dự án
+## PM Orchestrator — Phân tích brief MVP bán hàng trực tuyến
 
-Mục tiêu của yêu cầu này là **kiểm tra tính đồng bộ giữa task được giao, output sub-agent, file thực tế trong workspace và evidence hoàn thành**.
+### 1. Mục tiêu MVP
+Xây dựng phiên bản tối thiểu của hệ thống bán hàng trực tuyến cho phép:
 
-Đây là một task dạng **Workspace Audit / Delivery Verification**, không phải task phát triển tính năng mới.
+- Khách hàng xem danh sách sản phẩm
+- Xem chi tiết sản phẩm
+- Thêm sản phẩm vào giỏ hàng
+- Tạo đơn hàng
+- Quản trị cơ bản sản phẩm và đơn hàng
+- Theo dõi trạng thái đơn hàng ở mức đơn giản
 
-Kết quả mong muốn là một báo cáo theo format:
+### 2. Phạm vi MVP đề xuất
 
-```md
-# Workspace Inspection Result
-...
-```
+#### Chức năng khách hàng
+- Trang chủ / danh sách sản phẩm
+- Tìm kiếm hoặc lọc cơ bản
+- Trang chi tiết sản phẩm
+- Giỏ hàng
+- Checkout tạo đơn hàng
+- Xác nhận đặt hàng thành công
 
-Báo cáo cần trả lời rõ:
+#### Chức năng quản trị
+- Đăng nhập admin đơn giản
+- CRUD sản phẩm
+- Xem danh sách đơn hàng
+- Cập nhật trạng thái đơn hàng
 
-- Project root hiện tại là gì.
-- Gần đây agent/sub-agent đã tạo hoặc sửa file nào.
-- Có Git status/diff không.
-- Có artifact chuẩn không: PRD, Acceptance Criteria, Technical Spec, API Contract, implementation report, QA report, final-report.
-- Output từng sub-agent nằm ở đâu hoặc nội dung là gì.
-- Task board hiện tại có khớp với hiện trạng workspace không.
-- Có test evidence thực sự không.
-- Có lỗi nào khi chạy lệnh kiểm tra không.
+#### Ngoài phạm vi MVP ban đầu
+- Thanh toán online
+- Giao hàng tự động
+- Voucher / khuyến mãi phức tạp
+- Đánh giá sản phẩm
+- Chat realtime
+- Multi-vendor marketplace
 
 ---
 
-# Sơ đồ thực thi đề xuất
+## 3. Sơ đồ thực thi Multi-Agent
 
 ```text
-User Brief
-   |
-   v
-PM Orchestrator
-   |
-   +--> product-agent
-   |       - Xác định checklist acceptance cho audit
-   |       - Định nghĩa tiêu chí "đồng bộ / lệch / thiếu evidence"
-   |
-   +--> architecture-agent
-   |       - Xác định cấu trúc artifact kỳ vọng
-   |       - Đề xuất mapping: task -> file -> evidence -> agent output
-   |
-   +--> frontend-agent
-   |       - Kiểm tra các file frontend đã tạo/sửa
-   |       - Đối chiếu với task frontend nếu có
-   |
-   +--> backend-agent
-   |       - Kiểm tra các file backend/API đã tạo/sửa
-   |       - Đối chiếu với API Contract và task backend nếu có
-   |
-   +--> qa-agent
-           - Chạy/đọc test evidence
-           - Kiểm tra Git status, diff, logs, reports
-           - Tổng hợp lỗi, thiếu hụt, mismatch
+Wave 1: Khởi động & Đặc tả
+ ├── Product Agent
+ │    └── PRD, user stories, acceptance criteria
+ └── Architecture Agent
+      └── Tech spec, database schema, API contract
 
-PM Orchestrator
-   |
-   v
-Final Workspace Inspection Result
+Wave 2: Thực thi song song
+ ├── Frontend Agent
+ │    └── UI khách hàng + admin dashboard
+ └── Backend Agent
+      └── API sản phẩm, giỏ hàng, đơn hàng, admin auth
+
+Wave 3: Tích hợp & Kiểm thử
+ └── QA Agent
+      └── Test API, UI flow, business logic, bug report
+
+Wave 4: Đóng gói
+ └── PM Orchestrator
+      └── Tổng hợp final-report.md, kiểm tra nghiệm thu
 ```
 
 ---
 
-# Phân rã công việc sơ bộ
+## 4. Phân rã công việc sơ bộ
 
-## 1. product-agent
+### Product Agent
+**Nhiệm vụ:**
+- Làm rõ chân dung người dùng:
+  - Khách mua hàng
+  - Admin cửa hàng
+- Viết PRD cho MVP
+- Định nghĩa user stories
+- Đưa ra acceptance criteria cho từng flow chính
 
-**Mục tiêu:**  
-Xác định tiêu chí nghiệm thu cho việc audit workspace.
-
-**Task:**
-
-- Đọc brief.
-- Chuẩn hóa checklist kiểm tra:
-  - File mới/sửa gần đây.
-  - Artifact bắt buộc.
-  - Task board/task state.
-  - Output sub-agent.
-  - Evidence test.
-  - Git status/diff.
-- Định nghĩa trạng thái:
-  - `Synced`
-  - `Partially Synced`
-  - `Missing Evidence`
-  - `Mismatch`
-  - `Unknown`
-
-**Output mong đợi:**
-
-- `acceptance-criteria.md`
-- Checklist audit ngắn gọn.
+**Deliverables:**
+- `docs/prd.md`
+- `docs/user-stories.md`
+- `docs/acceptance-criteria.md`
 
 ---
 
-## 2. architecture-agent
+### Architecture Agent
+**Nhiệm vụ:**
+- Đề xuất kiến trúc tổng thể
+- Thiết kế database schema
+- Thiết kế API contract
+- Quy định phân tách frontend/backend
+- Đề xuất cấu trúc thư mục dự án
 
-**Mục tiêu:**  
-Thiết kế cấu trúc kiểm tra và mapping artifact.
-
-**Task:**
-
-- Xác định các nhóm file cần tìm:
-  - PRD / Acceptance Criteria
-  - Technical Spec / API Contract
-  - Frontend report/implementation
-  - Backend report/implementation
-  - QA report/test evidence
-  - Task board/tasks/state
-  - Final report
-- Đề xuất bảng mapping:
-
-```text
-Task được giao -> File thực tế -> Output agent -> Evidence -> Trạng thái
-```
-
-**Output mong đợi:**
-
-- `workspace-audit-spec.md`
-- Danh sách pattern file cần scan.
+**Deliverables:**
+- `docs/technical-spec.md`
+- `docs/api-contract.md`
+- `docs/database-schema.md`
 
 ---
 
-## 3. frontend-agent
+### Frontend Agent
+**Nhiệm vụ:**
+- Xây dựng giao diện khách hàng:
+  - Trang danh sách sản phẩm
+  - Trang chi tiết sản phẩm
+  - Giỏ hàng
+  - Checkout
+- Xây dựng giao diện admin:
+  - Đăng nhập
+  - Quản lý sản phẩm
+  - Quản lý đơn hàng
+- Kết nối API theo contract
 
-**Mục tiêu:**  
-Kiểm tra phần frontend trong workspace.
-
-**Task:**
-
-- Tìm các file frontend mới/sửa gần đây.
-- Xác định có report/output frontend-agent không.
-- Đối chiếu với task frontend nếu có.
-- Ghi nhận thiếu evidence hoặc mismatch.
-
-**Không sửa file backend.**
-
-**Output mong đợi:**
-
-- `frontend-inspection-report.md`
-
----
-
-## 4. backend-agent
-
-**Mục tiêu:**  
-Kiểm tra phần backend/API trong workspace.
-
-**Task:**
-
-- Tìm các file backend/API mới/sửa gần đây.
-- Xác định có API Contract hoặc technical spec không.
-- Xác định có backend output/report không.
-- Đối chiếu task backend với file thực tế.
-- Kiểm tra nếu có test/log liên quan API.
-
-**Không sửa file frontend.**
-
-**Output mong đợi:**
-
-- `backend-inspection-report.md`
+**Deliverables:**
+- UI pages/components
+- API integration layer
+- Form validation cơ bản
 
 ---
 
-## 5. qa-agent
+### Backend Agent
+**Nhiệm vụ:**
+- Xây dựng API:
+  - Products
+  - Cart/session cart hoặc client-side cart support
+  - Orders
+  - Admin auth
+- Thiết kế database models
+- Seed dữ liệu mẫu
+- Xử lý validation và error response
 
-**Mục tiêu:**  
-Chạy kiểm tra tổng hợp và thu thập evidence.
-
-**Task:**
-
-Chạy các lệnh PowerShell tại project root:
-
-```powershell
-Get-Location
-
-Get-ChildItem -Force
-
-Get-ChildItem -Recurse -Force |
-  Select-Object FullName, LastWriteTime, Length |
-  Sort-Object LastWriteTime -Descending |
-  Select-Object -First 100
-
-Get-ChildItem -Recurse -Force -Include `
-  *prd*,*PRD*,*acceptance*,*criteria*,*spec*,*architecture*,*api*,*contract*,*qa*,*test*,*report*,*task*,*plan*,*final* |
-  Select-Object FullName, LastWriteTime, Length |
-  Sort-Object LastWriteTime -Descending
-
-git status --short
-git diff --stat
-git diff
-
-Get-ChildItem -Recurse -Force -Include *.log,*.md,*.json,*.txt |
-  Select-Object FullName, LastWriteTime, Length |
-  Sort-Object LastWriteTime -Descending |
-  Select-Object -First 200
-```
-
-**Output mong đợi:**
-
-- `qa-workspace-inspection.md`
-- Test/log evidence.
-- Known errors nếu lệnh lỗi.
+**Deliverables:**
+- Backend endpoints
+- Database migrations/schema
+- Seed sample products
+- API documentation cập nhật nếu cần
 
 ---
 
-# Vai trò PM Orchestrator
+### QA Agent
+**Nhiệm vụ:**
+- Kiểm thử flow người mua:
+  - Xem sản phẩm
+  - Thêm giỏ hàng
+  - Checkout
+  - Tạo đơn hàng thành công
+- Kiểm thử flow admin:
+  - Đăng nhập
+  - CRUD sản phẩm
+  - Cập nhật trạng thái đơn hàng
+- Kiểm thử API contract
+- Ghi nhận bug và bằng chứng kiểm thử
 
-PM sẽ tổng hợp toàn bộ output thành báo cáo cuối:
-
-```md
-# Workspace Inspection Result
-
-## 1. Project Root
-...
-
-## 2. Recent Files
-...
-
-## 3. Git Status
-...
-
-## 4. Artifact Files Found
-...
-
-## 5. Sub-agent Outputs
-### product-agent
-...
-### architecture-agent
-...
-### frontend-agent
-...
-### backend-agent
-...
-### qa-agent
-...
-
-## 6. Task State
-...
-
-## 7. Test Evidence
-...
-
-## 8. Known Errors
-...
-```
+**Deliverables:**
+- `docs/test-plan.md`
+- `docs/qa-report.md`
+- Danh sách bug/blocker nếu có
 
 ---
 
-# Thứ tự triển khai đề xuất
+## 5. Quality Gates
 
-1. **Wave 1 — Chuẩn hóa tiêu chí**
-   - product-agent
-   - architecture-agent
+### Gate 1 — Sau đặc tả
+Chỉ chuyển sang build khi có:
+- PRD
+- Acceptance criteria
+- API contract
+- Database schema
 
-2. **Wave 2 — Kiểm tra theo miền**
-   - frontend-agent
-   - backend-agent
+### Gate 2 — Sau triển khai
+Chỉ chuyển sang QA khi:
+- Frontend gọi được API thật hoặc mock chuẩn contract
+- Backend endpoint chạy được
+- Có dữ liệu mẫu
+- Không có lỗi build nghiêm trọng
 
-3. **Wave 3 — QA inspection**
-   - qa-agent chạy lệnh PowerShell, kiểm tra Git, logs, artifacts.
+### Gate 3 — Trước bàn giao
+Chỉ hoàn tất khi:
+- Flow mua hàng chạy end-to-end
+- Admin quản lý được sản phẩm và đơn hàng
+- QA có bằng chứng test
+- Có báo cáo tổng kết
 
-4. **Wave 4 — PM tổng hợp**
-   - Tạo `Workspace Inspection Result`.
-   - Đánh dấu mismatch, thiếu evidence, task chưa đồng bộ.
-   - Đề xuất bước khắc phục tiếp theo.
+---
+
+## 6. Cần làm rõ trước khi bắt đầu
+
+1. MVP dùng web app đơn giản hay cần responsive mobile-first?
+2. Có yêu cầu đăng ký/đăng nhập khách hàng không, hay checkout không cần tài khoản?
+3. Thanh toán chỉ là “COD / đặt hàng” hay cần tích hợp cổng thanh toán?
+4. Admin có một tài khoản cố định hay cần quản lý nhiều admin?
+5. Dự án ưu tiên tốc độ demo hay nền tảng mở rộng lâu dài?
+
+Đề xuất mặc định: **MVP web app responsive, khách hàng không cần đăng nhập, thanh toán COD, admin một tài khoản, ưu tiên demo nhanh nhưng cấu trúc đủ mở rộng.**

@@ -42,6 +42,18 @@ PIPELINE_SIGNALS = {
 for ev in PIPELINE_SIGNALS.values():
     ev.set()
 
+# ---------------------------------------------------------------------------
+# Global PM Q&A Bridge Signals
+# ---------------------------------------------------------------------------
+PM_ANSWER_EVENT = threading.Event()
+PM_ANSWER_TEXT = ""
+
+def set_pm_answer(text: str):
+    global PM_ANSWER_TEXT
+    PM_ANSWER_TEXT = text
+    PM_ANSWER_EVENT.set()
+
+
 def steer_agent_pipeline(agent_id: str, action: str = "resume") -> str:
     """
     Steer the pipeline execution for a specific sub-agent.
@@ -173,6 +185,7 @@ class OrchestratorRegistry:
         self._initialized = True
         self.agents: Dict[str, AgentInfo] = {}
         self._listeners: List[Callable] = []
+        self.current_project = "web-project"
         self._register_default_agents()
 
     def _register_default_agents(self):
@@ -212,6 +225,10 @@ class OrchestratorRegistry:
             return
         self.agents[agent_id].add_message(role, text, msg_type)
         self._notify("message", {"agent_id": agent_id, "role": role, "text": text, "type": msg_type})
+        try:
+            self.save_chat_history(self.current_project)
+        except Exception:
+            pass
 
     def stream_agent_message(self, agent_id: str, role: str, text: str, msg_type: str = "info"):
         if agent_id not in self.agents:
@@ -243,6 +260,10 @@ class OrchestratorRegistry:
         if agent.messages and agent.messages[-1].get("stream") is True:
             agent.messages[-1]["stream"] = False
         self._notify("message_stream_end", {"agent_id": agent_id})
+        try:
+            self.save_chat_history(self.current_project)
+        except Exception:
+            pass
 
     def get_all_states(self) -> List[dict]:
         return [a.to_dict() for a in self.agents.values()]
@@ -256,6 +277,41 @@ class OrchestratorRegistry:
         for agent in self.agents.values():
             agent.set_state(AgentState.IDLE)
         self._notify("idle_all", {})
+
+    def save_chat_history(self, project_name: str):
+        import json
+        from pathlib import Path
+        self.current_project = project_name
+        project_dir = Path("storage/projects") / project_name
+        project_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Gom tin nhắn của tất cả agent
+        history = {agent_id: agent.messages for agent_id, agent in self.agents.items()}
+        
+        history_file = project_dir / "chat_history.json"
+        with open(history_file, "w", encoding="utf-8") as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+
+    def load_chat_history(self, project_name: str) -> bool:
+        import json
+        from pathlib import Path
+        self.current_project = project_name
+        project_dir = Path("storage/projects") / project_name
+        history_file = project_dir / "chat_history.json"
+        if not history_file.exists():
+            return False
+            
+        with open(history_file, "r", encoding="utf-8") as f:
+            history = json.load(f)
+            
+        for agent_id, messages in history.items():
+            if agent_id in self.agents:
+                self.agents[agent_id].messages = messages
+        return True
+
+    def clear_all_messages(self):
+        for agent in self.agents.values():
+            agent.messages = []
 
 
 # ---------------------------------------------------------------------------
@@ -308,6 +364,36 @@ def run_agent(agent_name: str, task_desc: str, mock: bool = True,
         else:
             content = _real_output(agent_name, task_desc, prompt, model_name, tools)
 
+        # Check if PM Agent is asking questions (Q&A Bridge)
+        if agent_name == "pm-orchestrator" and "[PM_REQUEST]" in content:
+            question = content.replace("[PM_REQUEST]", "").strip()
+            
+            # Reset event and block
+            PM_ANSWER_EVENT.clear()
+            
+            # Send question to Main Agent for user to see
+            registry.add_agent_message(
+                "main-agent", "agent",
+                f"❓ **[Q&A Bridge] PM Agent đang hỏi:**\n\n{question}\n\n*Hãy trả lời ở khung chat của PM Agent.*",
+                "chat"
+            )
+            
+            # Add message from PM Agent itself to show in PM tab
+            registry.add_agent_message("pm-orchestrator", "agent", f"**[PM_REQUEST]** {question}", "chat")
+            
+            log(f"[Q&A Bridge] PM Agent is waiting for user answer to: {question[:50]}...", Colors.YELLOW)
+            PM_ANSWER_EVENT.wait()
+            
+            # Post the user's answer back to PM Agent's chat log
+            registry.add_agent_message("pm-orchestrator", "user", PM_ANSWER_TEXT, "chat")
+            
+            # Call Codex again (or mock) with the answer
+            if mock:
+                content = f"Cảm ơn câu trả lời của bạn: '{PM_ANSWER_TEXT}'. Tôi đã tiếp tục lập kế hoạch."
+            else:
+                followup_prompt = f"User answer: {PM_ANSWER_TEXT}. Please continue and finish the plan."
+                content = _real_output(agent_name, followup_prompt, prompt, model_name, tools)
+
         # Permission check on generated content
         if not check_permission(agent_name, content):
             registry.set_agent_state(agent_name, AgentState.ERROR)
@@ -346,6 +432,8 @@ def _mock_output(agent_name: str, task_desc: str) -> str:
     elif "qa" in agent_name:
         return "# QA Tests\ndef test_main(): assert True\n"
     elif "pm-orchestrator" in agent_name:
+        if "User answer" not in task_desc and "Cảm ơn" not in task_desc:
+            return "[PM_REQUEST] Bạn có muốn giao diện hỗ trợ thêm chế độ tối (Dark Mode) không? Hãy xác nhận để tôi phân rã chi tiết thiết kế."
         return (f"# PM Project Plan & Execution Strategy\n\n"
                 f"## 1. Project Brief Analysis\n{task_desc}\n\n"
                 f"## 2. Resource Assignment\n"
