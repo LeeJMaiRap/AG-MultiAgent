@@ -40,6 +40,10 @@ from orchestrate import OrchestratorRegistry, AgentState, run_pipeline, check_pe
 app = FastAPI(title="Antigravity 2.0 Agent Wall Chat")
 registry = OrchestratorRegistry()
 PORT = int(os.environ.get("WALL_CHAT_PORT", 20130))
+GLOBAL_MOCK = True
+BASE_DIR = Path(__file__).parent.parent.resolve()
+SUBAGENTS_DIR = BASE_DIR / "subagents"
+import time
 
 # ---------------------------------------------------------------------------
 # WebSocket Connection Manager
@@ -90,6 +94,14 @@ async def get_agents():
 async def get_agent_messages(agent_id: str):
     return registry.get_agent_messages(agent_id)
 
+@app.post("/api/mode")
+async def set_mode(body: dict):
+    global GLOBAL_MOCK
+    mock = body.get("mock", True)
+    GLOBAL_MOCK = mock
+    print(f"[Mode Switch] GLOBAL_MOCK set to: {GLOBAL_MOCK}")
+    return {"ok": True, "mock": GLOBAL_MOCK}
+
 @app.post("/api/agents/{agent_id}/chat")
 async def chat_to_agent(agent_id: str, body: dict):
     text = body.get("text", "").strip()
@@ -97,34 +109,119 @@ async def chat_to_agent(agent_id: str, body: dict):
         return {"error": "empty message"}
     if agent_id not in registry.agents:
         return {"error": "unknown agent"}
-
-    # Permission barrier: user messages to sub-agents cannot contain system commands
-    if not check_permission(agent_id, text):
-        registry.add_agent_message(agent_id, "system",
-                                   "BLOCKED: Message contains forbidden system patterns.", "error")
-        return {"error": "permission denied - system commands not allowed for sub-agents"}
-
-    registry.add_agent_message(agent_id, "user", text, "chat")
-
-    # Auto-reply (mock): in real mode this would call Gemini
-    reply = f"[{registry.agents[agent_id].display_name}] Received: '{text[:80]}'. Processing..."
-    registry.add_agent_message(agent_id, "agent", reply, "chat")
-    return {"ok": True, "reply": reply}
+    
+    process_chat_in_thread(agent_id, text)
+    return {"ok": True, "message": "Message processing started."}
 
 @app.post("/api/pipeline/start")
 async def start_pipeline(body: dict):
+    global GLOBAL_MOCK
     brief = body.get("brief", "").strip()
     project_name = body.get("project_name", "web-project")
     mock = body.get("mock", True)
+    GLOBAL_MOCK = mock
     if not brief:
         return {"error": "brief is required"}
 
     def _run():
-        run_pipeline(brief, project_name, mock=mock)
+        run_pipeline(brief, project_name, mock=GLOBAL_MOCK)
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
     return {"ok": True, "message": f"Pipeline started for '{project_name}'"}
+
+# ---------------------------------------------------------------------------
+# Asynchronous Chat Processing & Gemini API Handlers
+# ---------------------------------------------------------------------------
+def process_chat(agent_id: str, text: str):
+    global GLOBAL_MOCK
+    
+    # 1. Enforce permission barrier
+    if not check_permission(agent_id, text):
+        registry.add_agent_message(
+            agent_id, "system", 
+            "Quyền hạn bị từ chối: Lệnh hệ thống (/) và các lệnh can thiệp OS bị chặn đối với Sub-agents. Chỉ PM Agent hoặc Agent Chính mới có quyền này.", 
+            "error"
+        )
+        return
+        
+    # Add user message to registry (streams to WebSocket)
+    registry.add_agent_message(agent_id, "user", text, "chat")
+    
+    # 2. Main Agent flow
+    if agent_id == "main-agent":
+        keywords = ["dự án", "xây dựng", "thiết kế", "tạo", "build", "create", "mvp", "app", "project", "lập trình"]
+        if any(kw in text.lower() for kw in keywords):
+            registry.add_agent_message(
+                "main-agent", "agent", 
+                f"Tôi đã nhận diện được yêu cầu dự án của bạn: '{text[:100]}...'. Đang chuyển tiếp cho PM Agent để lập kế hoạch...", 
+                "chat"
+            )
+            
+            # Start pipeline in background
+            def _run():
+                run_pipeline(text, "user-project", mock=GLOBAL_MOCK)
+            thread = threading.Thread(target=_run, daemon=True)
+            thread.start()
+            return
+            
+        # Casual conversation with Main Agent
+        registry.set_agent_state("main-agent", AgentState.WORKING)
+        if GLOBAL_MOCK:
+            time.sleep(0.8)
+            reply = "Chào bạn! Tôi là Agent Chính (AG2.0). Rất vui được hỗ trợ bạn. Các Agent con đang ở trạng thái NGHỈ (Idle) để tiết kiệm token. Bạn có thể trò chuyện với tôi hoặc gửi một yêu cầu dự án (chứa các từ khóa như 'dự án', 'xây dựng', 'MVP', v.v.) để kích hoạt toàn bộ Web-Team hoạt động nhé!"
+        else:
+            try:
+                from google import genai
+                client = genai.Client()
+                system_prompt = "Bạn là Agent Chính (AG2.0), trợ lý AI điều phối chính của hệ thống MTA. Hãy trò chuyện thân thiện, chuyên nghiệp hoàn toàn bằng tiếng Việt. Nếu người dùng đưa ra yêu cầu dự án, hãy khuyên họ nhập chi tiết để bạn chuyển tiếp cho PM Agent."
+                resp = client.models.generate_content(
+                    model="gemini-2.5-pro",
+                    contents=f"System Prompt:\n{system_prompt}\n\nUser Chat:\n{text}"
+                )
+                reply = resp.text
+            except Exception as e:
+                reply = f"Lỗi kết nối Gemini API (Live Mode): {e}. Hãy kiểm tra GEMINI_API_KEY hoặc thử lại với Mock Mode."
+        registry.add_agent_message("main-agent", "agent", reply, "chat")
+        registry.set_agent_state("main-agent", AgentState.IDLE)
+        return
+
+    # 3. PM Agent & Sub-agents flow
+    registry.set_agent_state(agent_id, AgentState.WORKING)
+    
+    if GLOBAL_MOCK:
+        time.sleep(0.8)
+        mock_responses = {
+            "pm-orchestrator": "Tôi là PM Agent. Tôi chịu trách nhiệm lập kế hoạch dự án, phân rã nhiệm vụ và điều phối toàn bộ Web-Team hoạt động song song.",
+            "product-agent": "Tôi là Product Agent. Tôi chuyên phân tích yêu cầu từ bản mô tả brief của khách hàng để xuất ra tài liệu PRD hoàn chỉnh.",
+            "architecture-agent": "Tôi là Architecture Agent. Tôi chịu trách nhiệm thiết kế cấu trúc thư mục, định nghĩa API contract và sơ đồ dữ liệu cho dự án.",
+            "frontend-agent": "Tôi là Frontend Agent. Tôi tạo ra giao diện người dùng đẹp mắt, responsive và áp dụng các hiệu ứng chuyển động mượt mà.",
+            "backend-agent": "Tôi là Backend Agent. Tôi phụ trách xây dựng cơ sở dữ liệu, viết logic nghiệp vụ xử lý API và tích hợp với Frontend.",
+            "qa-agent": "Tôi là QA Agent. Tôi tự động thiết lập bộ test case, chạy thử nghiệm hệ thống và rà soát lỗi bảo mật trước khi bàn giao dự án."
+        }
+        reply = mock_responses.get(agent_id, f"Tôi là {registry.agents[agent_id].display_name}. Rất vui được nhận tin nhắn từ bạn!")
+    else:
+        try:
+            # Get agent system prompt
+            prompt_path = SUBAGENTS_DIR / f"{agent_id}.md"
+            prompt = prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else "Bạn là một AI Agent trong hệ thống Multi-Agent."
+            from google import genai
+            client = genai.Client()
+            model_name = registry.agents[agent_id].model
+            resp = client.models.generate_content(
+                model=model_name,
+                contents=f"System Prompt:\n{prompt}\n\nUser Chat:\n{text}\n\nHãy phản hồi ngắn gọn bằng tiếng Việt theo đúng vai trò và nhiệm vụ của bạn."
+            )
+            reply = resp.text
+        except Exception as e:
+            reply = f"Lỗi kết nối Gemini API cho {agent_id} (Live Mode): {e}."
+            
+    registry.add_agent_message(agent_id, "agent", reply, "chat")
+    registry.set_agent_state(agent_id, AgentState.IDLE)
+
+def process_chat_in_thread(agent_id: str, text: str):
+    thread = threading.Thread(target=process_chat, args=(agent_id, text), daemon=True)
+    thread.start()
 
 # ---------------------------------------------------------------------------
 # WebSocket Endpoint
@@ -145,16 +242,7 @@ async def websocket_endpoint(ws: WebSocket):
             agent_id = msg.get("agent_id")
             text = msg.get("text", "")
             if agent_id and text:
-                if not check_permission(agent_id, text):
-                    await ws.send_text(json.dumps({
-                        "event": "error",
-                        "agent_id": agent_id,
-                        "text": "Permission denied: system commands blocked for sub-agents."
-                    }))
-                else:
-                    registry.add_agent_message(agent_id, "user", text, "chat")
-                    reply = f"[{registry.agents[agent_id].display_name}] Received your message."
-                    registry.add_agent_message(agent_id, "agent", reply, "chat")
+                process_chat_in_thread(agent_id, text)
     except WebSocketDisconnect:
         manager.disconnect(ws)
 
@@ -622,10 +710,6 @@ function sendChat() {
     input.value = '';
     // Send via WebSocket
     ws.send(JSON.stringify({ agent_id: activeAgent, text: text }));
-    // Optimistic local render
-    if (!agentMessages[activeAgent]) agentMessages[activeAgent] = [];
-    agentMessages[activeAgent].push({ ts: new Date().toISOString(), role: 'user', text: text, type: 'chat' });
-    renderMessages();
 }
 
 function startPipeline() {
@@ -656,6 +740,16 @@ function escapeHtml(str) {
 }
 
 connect();
+
+// Sync dropdown mode switch with backend in real-time
+document.getElementById('mode-select').addEventListener('change', (e) => {
+    const isMock = e.target.value === 'mock';
+    fetch('/api/mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mock: isMock })
+    });
+});
 </script>
 </body>
 </html>"""

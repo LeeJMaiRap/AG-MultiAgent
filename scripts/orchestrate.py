@@ -92,12 +92,18 @@ BLOCKED_PATTERNS = [
 def check_permission(agent_id: str, content: str) -> bool:
     """
     Enforce the permission barrier for sub-agents.
-    Sub-agents (non-PM, non-orchestrator) are NOT allowed to execute
-    system commands. Returns True if the content is safe.
+    Sub-agents (non-PM, non-orchestrator, non-main-agent) are NOT allowed to execute
+    system commands or slash commands. Returns True if the content is safe.
     """
-    privileged_agents = {"pm-orchestrator"}
+    privileged_agents = {"pm-orchestrator", "main-agent"}
     if agent_id in privileged_agents:
         return True
+    
+    # Block slash system commands for sub-agents
+    trimmed = content.strip()
+    if trimmed.startswith("/"):
+        return False
+        
     content_lower = content.lower()
     for pattern in BLOCKED_PATTERNS:
         if pattern.lower() in content_lower:
@@ -134,6 +140,7 @@ class OrchestratorRegistry:
 
     def _register_default_agents(self):
         defaults = [
+            ("main-agent", "Agent Chính (AG2.0)", "Primary AI Assistant & Coordinator", "gemini-2.5-pro"),
             ("pm-orchestrator", "PM Agent", "Orchestrator / Project Manager", "gemini-2.5-pro"),
             ("product-agent", "Product Agent", "Requirements & PRD", "gemini-2.5-flash"),
             ("architecture-agent", "Architecture Agent", "System Design & API", "gemini-2.5-flash"),
