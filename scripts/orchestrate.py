@@ -41,7 +41,7 @@ class AgentState(str, Enum):
 
 class AgentInfo:
     """Tracks an individual agent's identity, state, and message log."""
-    def __init__(self, agent_id: str, display_name: str, role: str, model: str = "gemini-2.5-flash"):
+    def __init__(self, agent_id: str, display_name: str, role: str, model: str = "cx/gpt-5.5"):
         self.agent_id = agent_id
         self.display_name = display_name
         self.role = role
@@ -217,7 +217,7 @@ def load_prompt(agent_name):
 
 
 def run_agent(agent_name: str, task_desc: str, mock: bool = True,
-              model_name: str = 'gemini-2.5-flash', tools=None) -> dict:
+              model_name: str = 'cx/gpt-5.5', tools=None) -> dict:
     """Run a single agent with full state-lifecycle tracking."""
 
     # 1. Transition to WORKING
@@ -302,7 +302,7 @@ def _real_output(agent_name, task_desc, prompt, model_name, tools):
     }
     
     try:
-        resp = requests.post(url, json=payload, headers=headers, timeout=60)
+        resp = requests.post(url, json=payload, headers=headers, timeout=300)
         
         # Log response status
         print(f"[Codex Response DEBUG] Status: {resp.status_code}")
@@ -385,7 +385,7 @@ def run_pipeline(brief: str, project_name: str = "my-new-project", mock: bool = 
     ]
     pm_ctx = f"Project: {project_name}\nBrief: {brief}\nQA: {res_qa['content']}"
     res_pm = run_agent("pm-orchestrator", pm_ctx, mock=mock,
-                       model_name="gemini-2.5-pro")
+                       model_name="cx/gpt-5.5")
 
     summary = res_pm["content"] if not mock else (
         f"# PM Project Summary\n\n- Project: {project_name}\n- Status: Completed\n"

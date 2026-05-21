@@ -199,7 +199,7 @@ def process_chat(agent_id: str, text: str):
                     "temperature": 0.4
                 }
                 
-                resp = requests.post(url, json=payload, headers=headers, timeout=60)
+                resp = requests.post(url, json=payload, headers=headers, timeout=300)
                 print(f"[Codex Response DEBUG] main-agent | Status: {resp.status_code}")
                 
                 if resp.status_code != 200:
@@ -267,7 +267,7 @@ def process_chat(agent_id: str, text: str):
                 "temperature": 0.3
             }
             
-            resp = requests.post(url, json=payload, headers=headers, timeout=60)
+            resp = requests.post(url, json=payload, headers=headers, timeout=300)
             print(f"[Codex Response DEBUG] {agent_id} | Status: {resp.status_code}")
             
             if resp.status_code != 200:
