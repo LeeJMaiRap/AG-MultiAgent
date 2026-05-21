@@ -1,0 +1,235 @@
+{
+  "agents": [
+    {
+      "id": "pm",
+      "name": "PM Agent",
+      "lane": "orchestrator",
+      "status": "idle"
+    },
+    {
+      "id": "requirements",
+      "name": "Requirements Agent",
+      "lane": "planning",
+      "status": "done"
+    },
+    {
+      "id": "backend",
+      "name": "Backend Agent",
+      "lane": "build",
+      "status": "done"
+    },
+    {
+      "id": "qa",
+      "name": "QA Agent",
+      "lane": "review",
+      "status": "working"
+    },
+    {
+      "id": "security-review-agent-9829",
+      "name": "Security Review Agent",
+      "lane": "review",
+      "status": "idle"
+    },
+    {
+      "id": "persist-1779326299874-9882",
+      "name": "persist-1779326299874",
+      "lane": "custom",
+      "status": "idle"
+    }
+  ],
+  "messages": {
+    "pm": [
+      {
+        "id": 1779326299833.2197,
+        "ts": "2026-05-21T01:18:19.833Z",
+        "role": "user",
+        "text": "smoke flow"
+      },
+      {
+        "id": 1779326300183.7366,
+        "ts": "2026-05-21T01:18:20.183Z",
+        "role": "agent",
+        "text": "Đã nhận PM task: \"smoke flow\". Bấm Run Demo Flow để chạy orchestration."
+      }
+    ],
+    "requirements": [
+      {
+        "id": 1779326300338.6484,
+        "ts": "2026-05-21T01:18:20.338Z",
+        "role": "agent",
+        "text": "REQ_ACK run-1779326299835: ACK: nhận task từ PM"
+      },
+      {
+        "id": 1779326301338.0625,
+        "ts": "2026-05-21T01:18:21.338Z",
+        "role": "agent",
+        "text": "REQ_WORK run-1779326299835: WORKING: phân tích scope + acceptance"
+      },
+      {
+        "id": 1779326302539.0076,
+        "ts": "2026-05-21T01:18:22.539Z",
+        "role": "agent",
+        "text": "REQ_DONE run-1779326299835: DONE: handoff Backend"
+      }
+    ],
+    "backend": [
+      {
+        "id": 1779326303238.1333,
+        "ts": "2026-05-21T01:18:23.238Z",
+        "role": "agent",
+        "text": "BE_ACK run-1779326299835: ACK: nhận handoff Requirements"
+      },
+      {
+        "id": 1779326304439.3303,
+        "ts": "2026-05-21T01:18:24.439Z",
+        "role": "agent",
+        "text": "BE_WORK run-1779326299835: WORKING: implement code"
+      },
+      {
+        "id": 1779326306037.029,
+        "ts": "2026-05-21T01:18:26.037Z",
+        "role": "agent",
+        "text": "BE_DONE run-1779326299835: DONE: handoff QA"
+      }
+    ],
+    "qa": [
+      {
+        "id": 1779326306838.6536,
+        "ts": "2026-05-21T01:18:26.838Z",
+        "role": "agent",
+        "text": "QA_ACK run-1779326299835: ACK: nhận handoff Backend"
+      },
+      {
+        "id": 1779326308037.4102,
+        "ts": "2026-05-21T01:18:28.037Z",
+        "role": "agent",
+        "text": "QA_WORK run-1779326299835: WORKING: chạy test positive/negative"
+      }
+    ],
+    "security-review-agent-9829": [],
+    "persist-1779326299874-9882": []
+  },
+  "mailbox": {
+    "pm": {
+      "inbox": [],
+      "outbox": [
+        {
+          "id": "mail-1779326299836-90316cc1dee5e",
+          "ts": "2026-05-21T01:18:19.836Z",
+          "from": "pm",
+          "to": "requirements",
+          "type": "task",
+          "subject": "Task run-1779326299835",
+          "body": "smoke run",
+          "runId": "run-1779326299835",
+          "artifactUrl": null,
+          "read": false
+        }
+      ]
+    },
+    "requirements": {
+      "inbox": [
+        {
+          "id": "mail-1779326299836-90316cc1dee5e",
+          "ts": "2026-05-21T01:18:19.836Z",
+          "from": "pm",
+          "to": "requirements",
+          "type": "task",
+          "subject": "Task run-1779326299835",
+          "body": "smoke run",
+          "runId": "run-1779326299835",
+          "artifactUrl": null,
+          "read": false
+        }
+      ],
+      "outbox": [
+        {
+          "id": "mail-1779326302539-3548d0768f781",
+          "ts": "2026-05-21T01:18:22.539Z",
+          "from": "requirements",
+          "to": "backend",
+          "type": "handoff",
+          "subject": "REQ handoff run-1779326299835",
+          "body": "Requirements handoff ready",
+          "runId": "run-1779326299835",
+          "artifactUrl": "/runs/run-1779326299835/handoff-req-to-be.md",
+          "read": false
+        }
+      ]
+    },
+    "backend": {
+      "inbox": [
+        {
+          "id": "mail-1779326302539-3548d0768f781",
+          "ts": "2026-05-21T01:18:22.539Z",
+          "from": "requirements",
+          "to": "backend",
+          "type": "handoff",
+          "subject": "REQ handoff run-1779326299835",
+          "body": "Requirements handoff ready",
+          "runId": "run-1779326299835",
+          "artifactUrl": "/runs/run-1779326299835/handoff-req-to-be.md",
+          "read": false
+        }
+      ],
+      "outbox": [
+        {
+          "id": "mail-1779326306037-492674358fcb4",
+          "ts": "2026-05-21T01:18:26.037Z",
+          "from": "backend",
+          "to": "qa",
+          "type": "handoff",
+          "subject": "BE handoff run-1779326299835",
+          "body": "Backend handoff ready",
+          "runId": "run-1779326299835",
+          "artifactUrl": "/runs/run-1779326299835/handoff-be-to-qa.md",
+          "read": false
+        }
+      ]
+    },
+    "qa": {
+      "inbox": [
+        {
+          "id": "mail-1779326306037-492674358fcb4",
+          "ts": "2026-05-21T01:18:26.037Z",
+          "from": "backend",
+          "to": "qa",
+          "type": "handoff",
+          "subject": "BE handoff run-1779326299835",
+          "body": "Backend handoff ready",
+          "runId": "run-1779326299835",
+          "artifactUrl": "/runs/run-1779326299835/handoff-be-to-qa.md",
+          "read": false
+        }
+      ],
+      "outbox": []
+    },
+    "security-review-agent-9829": {
+      "inbox": [],
+      "outbox": []
+    },
+    "persist-1779326299874-9882": {
+      "inbox": [],
+      "outbox": []
+    }
+  },
+  "reviews": [],
+  "audit": [],
+  "runs": [
+    {
+      "runId": "run-1779326299835",
+      "ts": "2026-05-21T01:18:19.836Z",
+      "task": "smoke run",
+      "mode": "normal",
+      "status": "running",
+      "phase": "QA_WORK",
+      "path": "/runs/run-1779326299835",
+      "artifacts": [
+        "/runs/run-1779326299835/timeline.log",
+        "/runs/run-1779326299835/requirements.log",
+        "/runs/run-1779326299835/backend.log",
+        "/runs/run-1779326299835/qa.log"
+      ]
+    }
+  ]
+}

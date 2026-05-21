@@ -1,0 +1,1740 @@
+{
+  "version": 1,
+  "updatedAt": "2026-05-20T13:34:24.072Z",
+  "entries": {
+    "memory:memory/2026-05-16.md:104:145": {
+      "key": "memory:memory/2026-05-16.md:104:145",
+      "path": "memory/2026-05-16.md",
+      "startLine": 104,
+      "endLine": 145,
+      "source": "memory",
+      "snippet": "### Context Anh muốn bắt đầu dự án thật: web bán acc game, vừa làm vừa test PM Agent sau update. ### What happened 1. **Project scope clarification:** - Bán acc nhiều loại game - Khách xem danh sách → chọn → liên hệ mua (không cần đăng nhập) - Thanh toán qua SĐT/Facebook - Admin CRUD acc - Làm đầy đủ từ đầu - **Deadline: 2 ngày** - Stack đơn giản 2. **PM Agent initiation phase:** - Tạo project structure: `projects/active/web-ban-acc-game/` - Charter created: scope, timeline, stakeholders, risks - Requirements documented: 10 functional requirements, 4 NFRs - Tech stack decided: Next.js 14 + SQLite + Prisma + Tailwind + Vercel - Task board created: 14 task",
+      "recallCount": 5,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 5,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T06:09:06.763Z",
+      "lastRecalledAt": "2026-05-19T08:54:59.520Z",
+      "queryHashes": [
+        "05612a1e0105",
+        "de43c8cfda67",
+        "760a2622df3a",
+        "74c8ee5e74b6",
+        "3303c89b0745"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "sđt/facebook",
+        "projects/active/web-ban-acc-game",
+        "next.js",
+        "context",
+        "anh",
+        "muốn",
+        "bắt",
+        "đầu"
+      ]
+    },
+    "memory:memory/2026-05-16.md:1:41": {
+      "key": "memory:memory/2026-05-16.md:1:41",
+      "path": "memory/2026-05-16.md",
+      "startLine": 1,
+      "endLine": 41,
+      "source": "memory",
+      "snippet": "# Daily Memory - 2026-05-16 ## Morning Session - Memory & Context Recovery ### Context Anh Doanh nhắn từ Telegram và Control UI. Em gặp vấn đề không nhận ra anh qua Telegram. ### What happened 1. **Voice message transcription setup:** - Anh gửi 3 voice messages qua Telegram (file .ogg và .mp3) - Em không có STT tool → không transcribe được - Em cài Whisper vào venv riêng: `/root/.openclaw/workspace/.venv-stt` - Cài đặt thành công (torch, CUDA libs, whisper) - Test transcribe: kết quả \"axial\" (không rõ ràng, có thể do model tiny + audio ngắn) 2. **Memory/identity issue discovered:** - Anh hỏi qua Telegram: \"em nhớ anh là ai không?\" - Em chạy `memory_search` → không th",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T06:09:06.763Z",
+      "lastRecalledAt": "2026-05-19T06:09:06.763Z",
+      "queryHashes": [
+        "05612a1e0105"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "openclaw/workspace",
+        "venv-stt",
+        "memory/identity",
+        "memory-search",
+        "morning",
+        "context",
+        "recovery",
+        "anh"
+      ]
+    },
+    "memory:memory/2026-05-16.md:63:113": {
+      "key": "memory:memory/2026-05-16.md:63:113",
+      "path": "memory/2026-05-16.md",
+      "startLine": 63,
+      "endLine": 113,
+      "source": "memory",
+      "snippet": "- Cần có USER.md từ đầu để cross-session identity work --- ## Afternoon Session - STT/TTS Skill Development ### Context Anh yêu cầu em hoàn thành STT + TTS trong 30 phút. ### What happened 1. **STT upgrade:** - Nâng từ model `tiny` lên `base` (tốt hơn nhiều) - Tạo script: `systems/voice/scripts/transcribe.py` - Test thành công: transcribe file mp3 của anh → \"Xin chào!\" 2. **TTS implementation:** - Cài `edge-tts` (free, không cần API key) - Tạo script: `systems/voice/scripts/synthesize.py` - Voice: `vi-VN-HoaiMyNeural` - Test thành công: tạo file mp3 từ text 3. **End-to-end test:** - Anh gửi voice: \"Tạo một đoạn văn 50 chữ về anh và chuyển thành voice sau đó gửi",
+      "recallCount": 2,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 2,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T06:09:06.763Z",
+      "lastRecalledAt": "2026-05-19T07:55:14.270Z",
+      "queryHashes": [
+        "05612a1e0105",
+        "760a2622df3a"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "user.md",
+        "cross-session",
+        "stt/tts",
+        "edge-tts",
+        "vi-vn-hoaimyneural",
+        "end-to-end",
+        "cần",
+        "đầu"
+      ]
+    },
+    "memory:memory/2026-05-16.md:30:75": {
+      "key": "memory:memory/2026-05-16.md:30:75",
+      "path": "memory/2026-05-16.md",
+      "startLine": 30,
+      "endLine": 75,
+      "source": "memory",
+      "snippet": "- Tìm thấy Telegram info trong conversation metadata: - Username: Doanh31 - ID: 5168072926 - Display name: Doanh 4. **USER.md created:** - Em tạo file `USER.md` với đầy đủ thông tin về anh: - Tên, pronouns, timezone (UTC+7) - Telegram contact info - GitHub - Role & working style - Current & past projects - Từ giờ em sẽ nhận ra anh qua cả Control UI và Telegram 5. **Daily memory 2026-05-15 reviewed:** - Em đọc lại memory hôm qua - Nhớ lại: hôm qua vừa hoàn tất update PM Agent (all phases done) - Anh có chia sẻ thông tin cuộc thi WCAG 2.2 (accessibility competition) - Kế hoạch tiếp theo: bắt đầu dự án test PM agent E2E với context",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T06:09:06.763Z",
+      "lastRecalledAt": "2026-05-19T06:09:06.763Z",
+      "queryHashes": [
+        "05612a1e0105"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "user.md",
+        "2.2",
+        "tìm",
+        "thấy",
+        "telegram",
+        "info",
+        "trong",
+        "conversation"
+      ]
+    },
+    "memory:memory/2026-05-16.md:136:169": {
+      "key": "memory:memory/2026-05-16.md:136:169",
+      "path": "memory/2026-05-16.md",
+      "startLine": 136,
+      "endLine": 169,
+      "source": "memory",
+      "snippet": "- **Image storage:** Start with local, upgrade to Cloudinary if time permits - **Auth:** Simple JWT or NextAuth - **Timeline:** Day 1 (backend + public frontend), Day 2 (admin + deploy) ### Next steps - [ ] Anh xác nhận charter + plan - [ ] Bắt đầu execution: TASK-001 (setup project) - [ ] Day 1 target: backend API + public listing + acc detail working ### Outputs created - `projects/active/web-ban-acc-game/project.yaml` - `projects/active/web-ban-acc-game/01-initiation/charter.md` - `projects/active/web-ban-acc-game/01-initiation/requirements.md` - `projects/active/web-ban-acc-game/02-planning/task-board.md` - `projects/active/web-ban-acc-game/02-planning/tech-stack.md` - `projects/active",
+      "recallCount": 5,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 5,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T06:09:06.763Z",
+      "lastRecalledAt": "2026-05-19T08:54:59.520Z",
+      "queryHashes": [
+        "05612a1e0105",
+        "de43c8cfda67",
+        "760a2622df3a",
+        "74c8ee5e74b6",
+        "3303c89b0745"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "task-001",
+        "projects/active",
+        "image",
+        "storage",
+        "start",
+        "local",
+        "upgrade",
+        "cloudinary"
+      ]
+    },
+    "memory:memory/2026-05-15.md:181:206": {
+      "key": "memory:memory/2026-05-15.md:181:206",
+      "path": "memory/2026-05-15.md",
+      "startLine": 181,
+      "endLine": 206,
+      "source": "memory",
+      "snippet": "- Updated policy: `systems/pm-agent/runtime/policies/stale-project-detection-policy.md` (bổ sung severity levels) - Updated script: `systems/pm-agent/skills/project-operations/daily-project-report-generator/scripts/generate_daily_report.py` - Updated skill: `systems/pm-agent/skills/project-operations/daily-project-report-generator/SKILL.md` - Updated runbook: `systems/pm-agent/runtime/runbooks/daily-report-cron.md` (bổ sung logging/monitoring + fallback) - New scenarios: - `systems/pm-agent/eval/scenarios/source-conflict.md` - `systems/pm-agent/eval/scenarios/on-hold-in-active-path.md` - `systems/pm-agent/eval/scenarios/no-change-day.md` - `systems/pm-agent/eval/scenarios/missing-act",
+      "recallCount": 8,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 7.934984159791692,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T06:23:36.037Z",
+      "lastRecalledAt": "2026-05-19T20:27:41.042Z",
+      "queryHashes": [
+        "de43c8cfda67",
+        "760a2622df3a",
+        "2dff07eba0c5",
+        "66057682163e",
+        "3ed896ea3a42",
+        "c3d9233b4be5",
+        "800ad39faf77",
+        "095793617108"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "logging/monitoring",
+        "updated",
+        "policy",
+        "systems",
+        "runtime",
+        "policies",
+        "stale",
+        "project"
+      ]
+    },
+    "memory:memory/2026-05-15.md:161:183": {
+      "key": "memory:memory/2026-05-15.md:161:183",
+      "path": "memory/2026-05-15.md",
+      "startLine": 161,
+      "endLine": 183,
+      "source": "memory",
+      "snippet": "6. ✅ Phase 3.3 - Regression/eval pack v1 7. ✅ Phase 3.4 - Archived/portfolio dashboard foundation 8. **✅ Đợt update hoàn tất** ### Issues identified & resolved - ✅ Operational mismatch: `projects/active/web-ban-hang` + `status: on-hold` → đã migrate - ✅ Actor attribution yếu → đã hardening trong script - ✅ No-change detection thiếu → đã bổ sung - ✅ Conflict handling thiếu policy → đã bổ sung vào acceptance policy (làm sớm) - ✅ Cron logging/audit thiếu → đã bổ sung vào runbook - ✅ Stale severity levels thiếu → đã bổ sung vào stale policy - ✅ Regression/eval pack thiếu 4 scenarios mới → đã bổ sung - ✅ Portfolio/archived dashboard foundation thiếu → đã tạo - ✅ Conflict dữ liệu `web-ban-h",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T06:23:36.037Z",
+      "lastRecalledAt": "2026-05-19T06:23:36.037Z",
+      "queryHashes": [
+        "de43c8cfda67"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "3.3",
+        "regression/eval",
+        "3.4",
+        "archived/portfolio",
+        "projects/active/web-ban-hang",
+        "on-hold",
+        "no-change",
+        "logging/audit"
+      ]
+    },
+    "memory:memory/2026-05-15.md:101:141": {
+      "key": "memory:memory/2026-05-15.md:101:141",
+      "path": "memory/2026-05-15.md",
+      "startLine": 101,
+      "endLine": 141,
+      "source": "memory",
+      "snippet": "- Audit pack hiện có - Xác nhận đã có sẵn 6 scenarios nền: - vague requirement - scope change - worker failure - missing approval - stale project - false done - Bổ sung 4 scenarios còn thiếu theo plan: - `source-conflict.md` - `on-hold-in-active-path.md` - `no-change-day.md` - `missing-actor.md` - Cập nhật `regression-pack-checklist.md`: - thêm 4 scenario mới - thêm governance/reporting checks - thêm pass criteria rõ hơn - Tạo file tổng hợp pack: - `systems/pm-agent/eval/reports/regression-pack-v1-2026-05-15.md` - Đánh dấu Phase 3.3 hoàn tất trong plan 21. Anh yêu cầu làm Phase 3.4 -",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T08:08:11.326Z",
+      "lastRecalledAt": "2026-05-19T08:08:11.326Z",
+      "queryHashes": [
+        "74c8ee5e74b6"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "source-conflict.md",
+        "on-hold-in-active-path.md",
+        "no-change-day.md",
+        "missing-actor.md",
+        "regression-pack-checklist.md",
+        "governance/reporting",
+        "3.3",
+        "3.4"
+      ]
+    },
+    "memory:memory/2026-05-14.md:1:36": {
+      "key": "memory:memory/2026-05-14.md:1:36",
+      "path": "memory/2026-05-14.md",
+      "startLine": 1,
+      "endLine": 36,
+      "source": "memory",
+      "snippet": "# 2026-05-14 ## PM Agent Hardening Complete - Finished major hardening phase for PM Agent framework - Updated readiness assessment: - Framework completeness: ~85-88% - Production-readiness: ~78-82% - Added governance layers: actor tracking, acceptance verification, stale detection, rollback/recovery - Added multi-project visibility: archived/portfolio/cross-project dashboards - Commits: `22388e2`, `6fc800b`, `1a6fb89`, `cb32072` ## Cron 19:00 Daily Report Foundation - Created OpenClaw cron job: `pm-agent-daily-report-19h00` - Schedule: `0 19 * * *` UTC - Mode: agent cron (not system-event) - Delivery: none (file-only per spec) - Status: **disabled** (waiting for delivery noise fix befo",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T08:54:59.520Z",
+      "lastRecalledAt": "2026-05-19T08:54:59.520Z",
+      "queryHashes": [
+        "3303c89b0745"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "85-88",
+        "production-readiness",
+        "78-82",
+        "rollback/recovery",
+        "multi-project",
+        "archived/portfolio/cross-project",
+        "pm-agent-daily-report-19h00",
+        "system-event"
+      ]
+    },
+    "memory:memory/2026-05-19.md:1:17": {
+      "key": "memory:memory/2026-05-19.md:1:17",
+      "path": "memory/2026-05-19.md",
+      "startLine": 1,
+      "endLine": 17,
+      "source": "memory",
+      "snippet": "## Pre-compaction flush — Agent-Teams build progress - User prefers Vietnamese, terse review/checklist after each Agent-Teams phase, and explicit approval before next phase. - Current Agent-Teams work lives under `systems/agent-teams/`; PM Agent existing system must not be refactored until Phase 9. - Rollback baseline before Agent-Teams implementation: `f00edec chore: baseline before agent teams implementation`. - Behavior discipline commit: `2d4b1d9 docs: add operating discipline guidelines`. - Phase 0 foundation committed/pushed: `08cb994 docs: add agent teams phase 0 foundation`. - Phase 1 runtime protocols reportedly committed/pushed: `a2d7a3b docs: add agent teams phase 1 runtime pro",
+      "recallCount": 35,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 35,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T09:48:18.700Z",
+      "lastRecalledAt": "2026-05-19T20:23:25.123Z",
+      "queryHashes": [
+        "132758d502c8",
+        "162d4654efee",
+        "ccbcb7f68443",
+        "d3268fbc66a1",
+        "1e21c7195591",
+        "ef29b6750f82",
+        "65ed6e435fa9",
+        "03414a1ae644",
+        "64e1ce4336fe",
+        "fdb8291a3aee",
+        "b3db3fe228f2",
+        "3188a1a8fe8e",
+        "c16169395002",
+        "cd4e58b90d72",
+        "d59538ad1998",
+        "f9ce7c97c797",
+        "c88b93e8a89b",
+        "9450d32278f5",
+        "1242580ecf4c",
+        "4fb2daa065e4",
+        "9b4d1ab33b4c",
+        "d7d8b762a01f",
+        "42a3513847de",
+        "a5c38708f9a2",
+        "df8dab6531d8",
+        "fa3222e1b399",
+        "189f5cf049ce",
+        "312fc834e192",
+        "047772fae1f8",
+        "66057682163e",
+        "52c8dd804a13",
+        "6760c38fcfc3"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "pre-compaction",
+        "agent-teams",
+        "review/checklist",
+        "systems/agent-teams",
+        "committed/pushed",
+        "pre",
+        "compaction",
+        "flush"
+      ]
+    },
+    "memory:memory/2026-05-19.md:15:25": {
+      "key": "memory:memory/2026-05-19.md:15:25",
+      "path": "memory/2026-05-19.md",
+      "startLine": 15,
+      "endLine": 25,
+      "source": "memory",
+      "snippet": "- Phase 5.2 UX/Design Agent reportedly committed/pushed: `ee6b325 docs: add agent teams phase 5.2 ux design agent`. - Phase 5.3 Technical Architecture Agent reportedly committed/pushed: `bf111dd docs: add agent teams phase 5.3 architecture agent`. - Phase 5.4 API Contract Agent reportedly committed/pushed: `00373b8 docs: add agent teams phase 5.4 api contract agent`. - Phase 6.1 Frontend Agent reportedly committed/pushed: `cd91b64 docs: add agent teams phase 6.1 frontend agent`. - Phase 6.2 Backend Agent reportedly committed/pushed: `18f2818 docs: add agent teams phase 6.2 backend agent`. - Phase 6.3 QA/Test Agent reportedly committed/pushed: `fc56abf docs: add agent teams phase 6.3 qa test",
+      "recallCount": 41,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 41,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T09:48:18.700Z",
+      "lastRecalledAt": "2026-05-19T20:02:37.171Z",
+      "queryHashes": [
+        "65ed6e435fa9",
+        "03414a1ae644",
+        "fdb8291a3aee",
+        "b3db3fe228f2",
+        "3188a1a8fe8e",
+        "c16169395002",
+        "cd4e58b90d72",
+        "576098fe385e",
+        "d59538ad1998",
+        "f9ce7c97c797",
+        "c88b93e8a89b",
+        "9450d32278f5",
+        "1242580ecf4c",
+        "4fb2daa065e4",
+        "9b4d1ab33b4c",
+        "1a0a43a7b8fc",
+        "a92e9f0529cf",
+        "189f5cf049ce",
+        "312fc834e192",
+        "5a6809f00092",
+        "66057682163e",
+        "abc43aa5184e",
+        "510a42e0d7d6",
+        "84f855043368",
+        "57b45c60c434",
+        "52c8dd804a13",
+        "90081758ba48",
+        "f55094d4cf95",
+        "2588d61b3071",
+        "35848cd4752f",
+        "4d58a6ae952e",
+        "23c2f2cb3f2a"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "5.2",
+        "ux/design",
+        "committed/pushed",
+        "5.3",
+        "5.4",
+        "6.1",
+        "6.2",
+        "6.3"
+      ]
+    },
+    "memory:memory/2026-05-15.md:200:228": {
+      "key": "memory:memory/2026-05-15.md:200:228",
+      "path": "memory/2026-05-15.md",
+      "startLine": 200,
+      "endLine": 228,
+      "source": "memory",
+      "snippet": "- `systems/pm-agent/reports/portfolio/portfolio-summary.md` - Migrated project folder: `projects/on-hold/web-ban-hang/` - Updated file: `projects/on-hold/web-ban-hang/project.yaml` - Conflict resolution note: - `projects/on-hold/web-ban-hang/conflict-resolution-2026-05-15.md` - Generated reports: - `systems/pm-agent/reports/daily/2026-05-15.md` - `projects/on-hold/web-ban-hang/reports/daily/2026-05-15.md` ### Phases completed today - ✅ Phase 1 (đã xong trước) - ✅ Phase 2 - Daily reporting hardening (hoàn tất đủ checklist) - ✅ Cross-phase Priority - Lifecycle/Path Policy (hoàn tất) - ✅ Phase 3.1 - Acceptance verification rules (làm sớm do hiểu nhầm thứ tự) - ✅ Phase 3.2 - Stale detec",
+      "recallCount": 22,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 22,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T09:48:18.700Z",
+      "lastRecalledAt": "2026-05-19T17:10:36.622Z",
+      "queryHashes": [
+        "718f409eab73",
+        "16c212756fbb",
+        "132758d502c8",
+        "11da275f2917",
+        "65ed6e435fa9",
+        "64e1ce4336fe",
+        "fdb8291a3aee",
+        "b3db3fe228f2",
+        "c16169395002",
+        "576098fe385e",
+        "d59538ad1998",
+        "9450d32278f5",
+        "4fb2daa065e4",
+        "9b4d1ab33b4c",
+        "d7d8b762a01f",
+        "1a0a43a7b8fc",
+        "42a3513847de",
+        "df8dab6531d8",
+        "e133285a0bb9",
+        "6e72d59b188a",
+        "609695920d92",
+        "e9fdeba2c11e"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "projects/on-hold/web-ban-hang",
+        "cross-phase",
+        "lifecycle/path",
+        "3.1",
+        "3.2",
+        "systems",
+        "reports",
+        "portfolio"
+      ]
+    },
+    "memory:memory/2026-05-19.md:34:38": {
+      "key": "memory:memory/2026-05-19.md:34:38",
+      "path": "memory/2026-05-19.md",
+      "startLine": 34,
+      "endLine": 38,
+      "source": "memory",
+      "snippet": "- Completed Phase 7.6 Challenge / Devil’s Advocate Agent; committed and pushed `fbaf250 docs: add agent teams phase 7.6 challenge agent`. - Phase 7 now complete: Security Review, Performance Review, Code Review, DevOps/Deployment, Documentation, Challenge agents all specified. - Next proposed step: Phase 8.1 Demo scenario docs under `systems/agent-teams/examples/`, pending user approval. - Important discipline: keep runtime memory files `memory/.dreams/events.jsonl`, `memory/.dreams/short-term-recall.json`, and daily memory out of Agent-Teams phase commits unless user asks full workspace commit.",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T10:03:08.092Z",
+      "lastRecalledAt": "2026-05-19T10:03:08.092Z",
+      "queryHashes": [
+        "3ba6897eca20"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "7.6",
+        "devops/deployment",
+        "8.1",
+        "systems/agent-teams/examples",
+        "dreams/events.jsonl",
+        "dreams/short-term-recall.json",
+        "agent-teams",
+        "completed"
+      ]
+    },
+    "memory:memory/2026-05-19.md:25:36": {
+      "key": "memory:memory/2026-05-19.md:25:36",
+      "path": "memory/2026-05-19.md",
+      "startLine": 25,
+      "endLine": 36,
+      "source": "memory",
+      "snippet": "- Latest user-approved next work before compaction event: after Phase 7.3, assistant asked approval for Phase 7.4 DevOps/Deployment Agent. If user says do it, create `systems/agent-teams/agents/devops-deployment-agent/{AGENT.md,prompt.md,skills.md,examples.md}` and `systems/agent-teams/skills/devops/deployment-readiness.md`, verify, commit, push, report. - Scope warning: memory runtime files `memory/.dreams/events.jsonl` and `memory/.dreams/short-term-recall.json` often show modified; do not include them in Agent-Teams phase commits unless user asks for full workspace commit. - Shell warning: avoid brace expansion; use explicit `mkdir -p path1 path2 ...` because `/usr/bin/sh` failed with bra",
+      "recallCount": 36,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 36,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T10:03:08.092Z",
+      "lastRecalledAt": "2026-05-20T13:34:24.072Z",
+      "queryHashes": [
+        "d3268fbc66a1",
+        "1e21c7195591",
+        "ef29b6750f82",
+        "65ed6e435fa9",
+        "03414a1ae644",
+        "64e1ce4336fe",
+        "fdb8291a3aee",
+        "c16169395002",
+        "cd4e58b90d72",
+        "576098fe385e",
+        "d59538ad1998",
+        "f9ce7c97c797",
+        "c88b93e8a89b",
+        "9450d32278f5",
+        "1242580ecf4c",
+        "fa3222e1b399",
+        "189f5cf049ce",
+        "312fc834e192",
+        "5a6809f00092",
+        "047772fae1f8",
+        "abc43aa5184e",
+        "510a42e0d7d6",
+        "84f855043368",
+        "57b45c60c434",
+        "90081758ba48",
+        "f55094d4cf95",
+        "2588d61b3071",
+        "e5de8f39da29",
+        "35848cd4752f",
+        "4d58a6ae952e",
+        "23c2f2cb3f2a",
+        "5b8a065338b6"
+      ],
+      "recallDays": [
+        "2026-05-19",
+        "2026-05-20"
+      ],
+      "conceptTags": [
+        "user-approved",
+        "7.3",
+        "7.4",
+        "devops/deployment",
+        "agent.md",
+        "prompt.md",
+        "skills.md",
+        "examples.md"
+      ]
+    },
+    "memory:memory/2026-05-19.md:34:55": {
+      "key": "memory:memory/2026-05-19.md:34:55",
+      "path": "memory/2026-05-19.md",
+      "startLine": 34,
+      "endLine": 55,
+      "source": "memory",
+      "snippet": "- Completed Phase 7.6 Challenge / Devil’s Advocate Agent; committed and pushed `fbaf250 docs: add agent teams phase 7.6 challenge agent`. - Phase 7 now complete: Security Review, Performance Review, Code Review, DevOps/Deployment, Documentation, Challenge agents all specified. - Next proposed step: Phase 8.1 Demo scenario docs under `systems/agent-teams/examples/`, pending user approval. - Important discipline: keep runtime memory files `memory/.dreams/events.jsonl`, `memory/.dreams/short-term-recall.json`, and daily memory out of Agent-Teams phase commits unless user asks full workspace commit. ## Pre-compaction flush — Agent-Teams Phase 9.2 - User approved/requested: `làm Phase 9.2`. - Ph",
+      "recallCount": 14,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 14,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T11:04:58.082Z",
+      "lastRecalledAt": "2026-05-20T13:34:24.072Z",
+      "queryHashes": [
+        "1e21c7195591",
+        "03414a1ae644",
+        "cd4e58b90d72",
+        "f9ce7c97c797",
+        "c88b93e8a89b",
+        "1242580ecf4c",
+        "e725e8bcabda",
+        "52e2e7fcb522",
+        "2d98a04197fe",
+        "312fc834e192",
+        "5a6809f00092",
+        "f55094d4cf95",
+        "e5de8f39da29",
+        "5b8a065338b6"
+      ],
+      "recallDays": [
+        "2026-05-19",
+        "2026-05-20"
+      ],
+      "conceptTags": [
+        "7.6",
+        "devops/deployment",
+        "8.1",
+        "systems/agent-teams/examples",
+        "dreams/events.jsonl",
+        "dreams/short-term-recall.json",
+        "agent-teams",
+        "pre-compaction"
+      ]
+    },
+    "memory:memory/2026-05-15.md:39:76": {
+      "key": "memory:memory/2026-05-15.md:39:76",
+      "path": "memory/2026-05-15.md",
+      "startLine": 39,
+      "endLine": 76,
+      "source": "memory",
+      "snippet": "8. Anh yêu cầu migrate `web-ban-hang` sang `projects/on-hold/` ngay 9. Em đã migrate thành công: - move folder: `projects/active/web-ban-hang` → `projects/on-hold/web-ban-hang` - update `project.yaml`: - `source_of_truth: projects/on-hold/web-ban-hang` - `updated_at: 2026-05-15T06:58:00Z` 10. Anh yêu cầu: \"Hoàn tất hardening daily report\" 11. Em đã hardening daily report generator: - Nâng script `generate_daily_report.py`: - đọc thêm change log, issue log, git commits theo ngày - actor attribution tự động từ artifacts - no-change detection - wording đúng cho on-hold/stopped/archived - source conflict detection - Cập nhật SKILL.md -",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T11:04:58.082Z",
+      "lastRecalledAt": "2026-05-19T11:04:58.082Z",
+      "queryHashes": [
+        "1e21c7195591"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "web-ban-hang",
+        "projects/on-hold",
+        "projects/active/web-ban-hang",
+        "projects/on-hold/web-ban-hang",
+        "project.yaml",
+        "source-of-truth",
+        "updated-at",
+        "2026-05-15t06"
+      ]
+    },
+    "memory:memory/2026-05-15.md:68:112": {
+      "key": "memory:memory/2026-05-15.md:68:112",
+      "path": "memory/2026-05-15.md",
+      "startLine": 68,
+      "endLine": 112,
+      "source": "memory",
+      "snippet": "- Dùng case study `19 vs 2` làm ví dụ thực tế - Định nghĩa rule ưu tiên source khi conflict - Định nghĩa hành động bắt buộc khi gặp conflict 14. **Anh nhắc:** \"làm phase 2 xong rồi mới chuyển qua phase 3 sau\" 15. Em hiểu nhầm thứ tự, quay lại khóa Phase 2: - Bổ sung logging/audit vào runbook - Bổ sung monitoring & stability section - Đánh dấu 2 mục còn thiếu của Phase 2.2 hoàn tất - **Phase 2 giờ đã hoàn tất đủ checklist** 16. Anh yêu cầu check lại xem PM Agent đã update thật chưa hay chỉ report cho có - Em audit bằng file thật - Kết luận: có update thật, nhưng một số mục là `done at foundation level`, chưa phải fully proven 17. Anh yêu cầu làm tiếp Ph",
+      "recallCount": 3,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 3,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T11:41:25.228Z",
+      "lastRecalledAt": "2026-05-19T12:56:35.466Z",
+      "queryHashes": [
+        "11da275f2917",
+        "3188a1a8fe8e",
+        "576098fe385e"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "logging/audit",
+        "2.2",
+        "dùng",
+        "case",
+        "study",
+        "làm",
+        "thực",
+        "định"
+      ]
+    },
+    "memory:memory/2026-05-15.md:134:168": {
+      "key": "memory:memory/2026-05-15.md:134:168",
+      "path": "memory/2026-05-15.md",
+      "startLine": 134,
+      "endLine": 168,
+      "source": "memory",
+      "snippet": "- `stopped-projects-dashboard.md` (0 projects) - `archived-projects-dashboard.md` (1 project: pm-agent-e2e-demo-v2) - `portfolio-summary.md` (tổng hợp 2 projects) - Đánh dấu Phase 3.4 hoàn tất trong plan - **Cập nhật tiêu chí hoàn thành đợt update: tất cả đã đạt** 23. Anh yêu cầu commit lên GitHub - Commit: `ffed355` - Message: `Harden PM Agent production readiness and reconcile web-ban-hang` - Push thành công lên `origin/master` 24. Anh cung cấp thông tin cuộc thi đã đăng ký tham gia: - Cuộc thi thiết kế website/ứng dụng số đảm bảo tiếp cận số theo tiêu chuẩn WCAG 2.2 - Tổ chức bởi Khoa CNTT Trường ĐH Khoa học - ĐH Huế phối hợp HI - Hạn đă",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T11:41:25.228Z",
+      "lastRecalledAt": "2026-05-19T11:41:25.228Z",
+      "queryHashes": [
+        "11da275f2917"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "stopped-projects-dashboard.md",
+        "archived-projects-dashboard.md",
+        "pm-agent-e2e-demo-v2",
+        "portfolio-summary.md",
+        "3.4",
+        "web-ban-hang",
+        "origin/master",
+        "website/ứng"
+      ]
+    },
+    "memory:memory/2026-05-19.md:68:92": {
+      "key": "memory:memory/2026-05-19.md:68:92",
+      "path": "memory/2026-05-19.md",
+      "startLine": 68,
+      "endLine": 92,
+      "source": "memory",
+      "snippet": "- Phase 11 scope stayed docs-only: no app build, no runtime automation, no PM Agent runtime edits, no new agents. - Created Phase 11 paper pilot artifacts under `systems/agent-teams/examples/phase-11-paper-pilot/` for issue tracker MVP. - Phase 11 outcome reported to user as complete: - files created: 27 - task packets: 7 - agent reports: 7 - PM Agent remains orchestrator-only - paper pilot includes project brief, PRD, acceptance criteria, UX direction, architecture, API contract, ownership map, task packets, agent reports, integration report, QA paper review, final handoff, retrospective, verification report. - Verification reported: - `find systems/agent-teams/examples/phase-11",
+      "recallCount": 4,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 4,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T11:51:14.132Z",
+      "lastRecalledAt": "2026-05-19T14:56:27.716Z",
+      "queryHashes": [
+        "3c9891e061c0",
+        "3188a1a8fe8e",
+        "2652150b8bed",
+        "a5c38708f9a2"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "docs-only",
+        "orchestrator-only",
+        "phase",
+        "scope",
+        "stayed",
+        "docs",
+        "only",
+        "app"
+      ]
+    },
+    "memory:memory/2026-05-15.md:228:234": {
+      "key": "memory:memory/2026-05-15.md:228:234",
+      "path": "memory/2026-05-15.md",
+      "startLine": 228,
+      "endLine": 234,
+      "source": "memory",
+      "snippet": "- human:Doanh - quyết định Option B, yêu cầu draft policy, yêu cầu migrate project, yêu cầu hardening daily report, đồng ý thứ tự làm acceptance trước, nhắc phải hoàn tất phase 2 trước, yêu cầu audit progress thật, yêu cầu làm tiếp Phase 3.2, yêu cầu làm Phase 3.3, yêu cầu làm Phase 3.4, yêu cầu commit GitHub, cung cấp thông tin cuộc thi WCAG 2.2 - agent:main - đề xuất hướng đi, viết lại plan, draft policies, migrate project, hardening daily report, hoàn tất acceptance verification (sớm), khóa Phase 2, audit progress, hoàn tất Phase 3.2, hoàn tất Phase 3.3, hoàn tất Phase 3.4, resolve conflict, fix fallback, commit/push --- ## Time: 06:43 - 07:54 UTC",
+      "recallCount": 9,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 9,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T11:57:57.855Z",
+      "lastRecalledAt": "2026-05-19T16:51:01.518Z",
+      "queryHashes": [
+        "65ed6e435fa9",
+        "64e1ce4336fe",
+        "fdb8291a3aee",
+        "b3db3fe228f2",
+        "c16169395002",
+        "9450d32278f5",
+        "d7d8b762a01f",
+        "1a0a43a7b8fc",
+        "e133285a0bb9"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "3.2",
+        "3.3",
+        "3.4",
+        "2.2",
+        "commit/push",
+        "human:doanh",
+        "quyết",
+        "định"
+      ]
+    },
+    "memory:memory/2026-05-19.md:51:72": {
+      "key": "memory:memory/2026-05-19.md:51:72",
+      "path": "memory/2026-05-19.md",
+      "startLine": 51,
+      "endLine": 72,
+      "source": "memory",
+      "snippet": "- contract-first before parallel Frontend/Backend - ownership map before parallel wave - review/production wave before handoff/release - stop conditions for deploy, cloud/DNS/billing, secrets, destructive migration, high-risk scope change, ownership conflict, Critical/High blockers - route PM/core skills vs Agent-Teams specialist skills - Reported verify command: - `grep -n \"Agent-Teams\\|PM Orchestrator\\|Contract-first\\|contract-first\\|ownership\\|parallel\\|specialist\" systems/pm-agent/architecture/SYSTEM-PROMPT.md systems/pm-agent/architecture/WORKFLOW.md systems/pm-agent/skills/README.md` - Reported verify result: `18 matches in 3 files`. - Reported commit: `c1ed835 docs: align",
+      "recallCount": 18,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 18,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T12:06:19.205Z",
+      "lastRecalledAt": "2026-05-19T17:16:28.172Z",
+      "queryHashes": [
+        "03414a1ae644",
+        "64e1ce4336fe",
+        "b3db3fe228f2",
+        "3188a1a8fe8e",
+        "cd4e58b90d72",
+        "d59538ad1998",
+        "f9ce7c97c797",
+        "c88b93e8a89b",
+        "e725e8bcabda",
+        "a5c38708f9a2",
+        "42ac0837d50b",
+        "df8dab6531d8",
+        "52e2e7fcb522",
+        "a92e9f0529cf",
+        "6e72d59b188a",
+        "e9fdeba2c11e",
+        "2d98a04197fe",
+        "6af295edb6f9"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "contract-first",
+        "frontend/backend",
+        "review/production",
+        "handoff/release",
+        "cloud/dns/billing",
+        "high-risk",
+        "critical/high",
+        "pm/core"
+      ]
+    },
+    "memory:memory/2026-05-19.md:108:122": {
+      "key": "memory:memory/2026-05-19.md:108:122",
+      "path": "memory/2026-05-19.md",
+      "startLine": 108,
+      "endLine": 122,
+      "source": "memory",
+      "snippet": "- Commit/push: `ecac9f1 docs: add agent teams preflight protocol`. - Preflight required before `Local`, `Integration`, `Production`; optional for `Paper`, `Simulated`. - Missing tool/dependency must use approved fallback or report `Blocked` / `Needs Review`. No silent dependency install, stack changes, cloud/DNS/billing, deploy, or secrets. - User then approved Phase 16 Option A: align PM Agent docs with Preflight Protocol. Completed in prior turn. - Phase 16 outcome: - Updated PM Agent docs: - `systems/pm-agent/architecture/SYSTEM-PROMPT.md` - `systems/pm-agent/architecture/WORKFLOW.md` - `systems/pm-agent/skills/README.md` - Created `systems/agent-teams/examples/phase",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T12:21:25.638Z",
+      "lastRecalledAt": "2026-05-19T12:21:25.638Z",
+      "queryHashes": [
+        "f65e37b5eb1d"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "commit/push",
+        "tool/dependency",
+        "cloud/dns/billing",
+        "commit",
+        "push",
+        "ecac9f1",
+        "docs",
+        "add"
+      ]
+    },
+    "memory:memory/2026-05-19.md:133:144": {
+      "key": "memory:memory/2026-05-19.md:133:144",
+      "path": "memory/2026-05-19.md",
+      "startLine": 133,
+      "endLine": 144,
+      "source": "memory",
+      "snippet": "- Findings: no blocker for controlled local pilot; not production-ready; Medium risks included no body size limit and no auth/access control; Low risks included raw 500 error message, implicit API contract, malformed JSON returning 500. - Commit/push: `ccd7fe8 docs: add agent teams phase 20 review hardening`. - Phase 21 completed: explicit API contract + negative HTTP tests at `systems/agent-teams/examples/phase-21-api-contract-negative-tests/`. - Added `contracts/issue-http-contract.md`. - Added `maxJsonBytes` body guard, malformed JSON `400`, oversized body `413`, generic `500 Internal server error`. - Tests passed: 6 HTTP integration tests, 6 pass, 0 fail. - Build passed via `",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T12:48:21.449Z",
+      "lastRecalledAt": "2026-05-19T12:48:21.449Z",
+      "queryHashes": [
+        "13eaf9409319"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "production-ready",
+        "auth/access",
+        "commit/push",
+        "contracts/issue-http-contract.md",
+        "findings",
+        "blocker",
+        "controlled",
+        "local"
+      ]
+    },
+    "memory:memory/2026-05-19.md:120:135": {
+      "key": "memory:memory/2026-05-19.md:120:135",
+      "path": "memory/2026-05-19.md",
+      "startLine": 120,
+      "endLine": 135,
+      "source": "memory",
+      "snippet": "- Suggested next step to user: Phase 17 Option A — run PM Agent delegation simulation using `Verification Level` + `Preflight Required/Result` before expanding code pilot. - Current important constraint: do not commit runtime memory files or untracked PM daily report files unless user asks. ## 2026-05-19 — Agent-Teams Phases 19-21 - Phase 19 completed: Integration-level local server pilot at `systems/agent-teams/examples/phase-19-integration-server-pilot/`. - Dependency-free `node:http` server with routes `POST /api/issues`, `GET /api/issues`, `GET /issues`, and JSON 404 fallback. - Built-in `fetch` HTTP integration tests passed: 3 tests, 3 pass, 0 fail. - Build passed via `node --ch",
+      "recallCount": 3,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 3,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T12:56:35.466Z",
+      "lastRecalledAt": "2026-05-19T15:57:45.908Z",
+      "queryHashes": [
+        "576098fe385e",
+        "2652150b8bed",
+        "42ac0837d50b"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "required/result",
+        "agent-teams",
+        "19-21",
+        "integration-level",
+        "dependency-free",
+        "api/issues",
+        "built-in",
+        "suggested"
+      ]
+    },
+    "memory:memory/2026-05-19.md:108:125": {
+      "key": "memory:memory/2026-05-19.md:108:125",
+      "path": "memory/2026-05-19.md",
+      "startLine": 108,
+      "endLine": 125,
+      "source": "memory",
+      "snippet": "- Commit/push: `ecac9f1 docs: add agent teams preflight protocol`. - Preflight required before `Local`, `Integration`, `Production`; optional for `Paper`, `Simulated`. - Missing tool/dependency must use approved fallback or report `Blocked` / `Needs Review`. No silent dependency install, stack changes, cloud/DNS/billing, deploy, or secrets. - User then approved Phase 16 Option A: align PM Agent docs with Preflight Protocol. Completed in prior turn. - Phase 16 outcome: - Updated PM Agent docs: - `systems/pm-agent/architecture/SYSTEM-PROMPT.md` - `systems/pm-agent/architecture/WORKFLOW.md` - `systems/pm-agent/skills/README.md` - Created `systems/agent-teams/examples/phase",
+      "recallCount": 5,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 5,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T13:11:28.212Z",
+      "lastRecalledAt": "2026-05-19T19:34:44.322Z",
+      "queryHashes": [
+        "2652150b8bed",
+        "e725e8bcabda",
+        "6af295edb6f9",
+        "0d480a9879b9",
+        "f4bbcd783a43"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "commit/push",
+        "tool/dependency",
+        "cloud/dns/billing",
+        "commit",
+        "push",
+        "ecac9f1",
+        "docs",
+        "add"
+      ]
+    },
+    "memory:memory/2026-05-19.md:133:149": {
+      "key": "memory:memory/2026-05-19.md:133:149",
+      "path": "memory/2026-05-19.md",
+      "startLine": 133,
+      "endLine": 149,
+      "source": "memory",
+      "snippet": "- Findings: no blocker for controlled local pilot; not production-ready; Medium risks included no body size limit and no auth/access control; Low risks included raw 500 error message, implicit API contract, malformed JSON returning 500. - Commit/push: `ccd7fe8 docs: add agent teams phase 20 review hardening`. - Phase 21 completed: explicit API contract + negative HTTP tests at `systems/agent-teams/examples/phase-21-api-contract-negative-tests/`. - Added `contracts/issue-http-contract.md`. - Added `maxJsonBytes` body guard, malformed JSON `400`, oversized body `413`, generic `500 Internal server error`. - Tests passed: 6 HTTP integration tests, 6 pass, 0 fail. - Build passed via `",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T13:11:28.212Z",
+      "lastRecalledAt": "2026-05-19T13:11:28.212Z",
+      "queryHashes": [
+        "2652150b8bed"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "production-ready",
+        "auth/access",
+        "commit/push",
+        "contracts/issue-http-contract.md",
+        "findings",
+        "blocker",
+        "controlled",
+        "local"
+      ]
+    },
+    "memory:memory/2026-05-19.md:89:110": {
+      "key": "memory:memory/2026-05-19.md:89:110",
+      "path": "memory/2026-05-19.md",
+      "startLine": 89,
+      "endLine": 110,
+      "source": "memory",
+      "snippet": "- templates should distinguish `Paper verification` vs `Real verification` - Next suggested Phase 12 options: - Option A: harden templates before real pilot (`Verification Level`, real-pilot checklist, stop gate if “tested” lacks evidence) - Option B: tiny real implementation pilot, strict owned paths, no deploy - User then sent OpenClaw runtime event continuation twice. Respond normally with `NO_REPLY` after memory append. ## 2026-05-19 12:20 UTC — Memory flush: Agent-Teams Phases 15-16 - User approved and requested Phase 15 Option A: add preflight protocol/check tools-deps before real implementation task. Completed in prior turn. - Phase 15 outcome: - Added `systems/agent-teams/",
+      "recallCount": 6,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 6,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T13:11:28.212Z",
+      "lastRecalledAt": "2026-05-20T13:34:24.072Z",
+      "queryHashes": [
+        "2652150b8bed",
+        "6af295edb6f9",
+        "2dff07eba0c5",
+        "0d480a9879b9",
+        "cc0c6177b1d4",
+        "5b8a065338b6"
+      ],
+      "recallDays": [
+        "2026-05-19",
+        "2026-05-20"
+      ],
+      "conceptTags": [
+        "real-pilot",
+        "no-reply",
+        "agent-teams",
+        "15-16",
+        "protocol/check",
+        "tools-deps",
+        "systems/agent-teams",
+        "templates"
+      ]
+    },
+    "memory:memory/2026-05-19.md:156:167": {
+      "key": "memory:memory/2026-05-19.md:156:167",
+      "path": "memory/2026-05-19.md",
+      "startLine": 156,
+      "endLine": 167,
+      "source": "memory",
+      "snippet": "- Created protocol docs for browser automation preflight, approval gate, fallback/blocked rules, and evidence checklist. - Explicitly documented approval gate for `npx playwright install`, `npx playwright install chromium`, `npm install playwright`, `npm install puppeteer`, `apt install chromium`, `apt-get install chromium`. - Defined browser-like fallback vs real browser proof vs Blocked decision matrix. - Commit/push: `cb845ad docs: add agent teams phase 23 browser tooling readiness`. - Phase 24 completed: align Agent-Teams runtime/templates with browser tooling readiness. - Updated `systems/agent-teams/runtime/preflight-protocol.md`, `systems/agent-teams/runtime/quality-gates.md",
+      "recallCount": 15,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 15,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T13:32:35.700Z",
+      "lastRecalledAt": "2026-05-19T20:31:13.594Z",
+      "queryHashes": [
+        "1242580ecf4c",
+        "5a6809f00092",
+        "2dff07eba0c5",
+        "abc43aa5184e",
+        "1b929820226a",
+        "a763205a2b14",
+        "61f89085be8e",
+        "5ebcdf59f146",
+        "e5de8f39da29",
+        "f4bbcd783a43",
+        "2801b2ef61e3",
+        "cc0c6177b1d4",
+        "3ed896ea3a42",
+        "3b4d83be9901",
+        "f922e31f60ac"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "fallback/blocked",
+        "apt-get",
+        "browser-like",
+        "commit/push",
+        "agent-teams",
+        "runtime/templates",
+        "created",
+        "protocol"
+      ]
+    },
+    "memory:memory/2026-05-19.md:181:185": {
+      "key": "memory:memory/2026-05-19.md:181:185",
+      "path": "memory/2026-05-19.md",
+      "startLine": 181,
+      "endLine": 185,
+      "source": "memory",
+      "snippet": "- Phase 30 Option A completed: Agent-Teams Readiness Review + v1 Cutover Plan. Created readiness matrix, known blockers, v1 cutover plan, first real project adoption runbook, verification report under `systems/agent-teams/examples/phase-30-readiness-review/`. Commit: `27ab429 docs: add agent teams phase 30 readiness review` pushed to `master`. - Phase 30 conclusion: Agent-Teams ready for v1 controlled real-project pilot under guardrails: local-only default, no deploy, no secrets, no cloud/DNS/billing, preflight required for Local/Integration/Production, API contract before FE/BE parallel. Real browser automation/screenshot/a11y/visual proof remains Blocked. Browser-like fallback and `node --",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T13:39:40.379Z",
+      "lastRecalledAt": "2026-05-19T13:39:40.379Z",
+      "queryHashes": [
+        "31a485718295"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "agent-teams",
+        "real-project",
+        "local-only",
+        "cloud/dns/billing",
+        "local/integration/production",
+        "fe/be",
+        "browser-like",
+        "phase"
+      ]
+    },
+    "memory:memory/2026-05-19.md:215:226": {
+      "key": "memory:memory/2026-05-19.md:215:226",
+      "path": "memory/2026-05-19.md",
+      "startLine": 215,
+      "endLine": 226,
+      "source": "memory",
+      "snippet": "- Test coverage included empty/list/create, HTML empty/populated/escaping, validation error, malformed JSON, oversized body, unknown route. - `npm test`: 8 tests, 8 pass, 0 fail. - `npm run build`: PASS via `node --check`. - Guardrails: no install/deploy process, no PM Agent/runtime/templates changes, no browser/screenshot/a11y/production-ready claim. - Commit/push: `a7f9650 test: add agent teams phase 34 mini tracker integration`. - Latest recommended next step: Phase 35 Option A — PM Acceptance + v1 Pilot Retrospective. - Suggested work: PM acceptance report based on Phase 32-34 evidence, requirements traceability matrix, cutover decision (`accept local pilot` / `fix gaps` / `s",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T14:06:34.982Z",
+      "lastRecalledAt": "2026-05-19T14:06:34.982Z",
+      "queryHashes": [
+        "dd2d4322e791"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "empty/list/create",
+        "empty/populated/escaping",
+        "install/deploy",
+        "agent/runtime/templates",
+        "commit/push",
+        "32-34",
+        "test",
+        "coverage"
+      ]
+    },
+    "memory:memory/2026-05-19.md:175:181": {
+      "key": "memory:memory/2026-05-19.md:175:181",
+      "path": "memory/2026-05-19.md",
+      "startLine": 175,
+      "endLine": 181,
+      "source": "memory",
+      "snippet": "## 2026-05-19 — Agent-Teams Phase 28-30 durable flush - Phase 28 completed: created real browser install approval draft for exact command `npx playwright install chromium`; no install/download performed in Phase 28. Commit: `0bc0a51 docs: add agent teams phase 28 browser install approval draft`. - User approved exact command `npx playwright install chromium`. - Phase 29 completed: ran only approved exact command `npx playwright install chromium`; result blocked: `Failed to install browsers` / `ERROR: Playwright does not support chromium on ubuntu26.04-x64`. Browser launch still failed because executable missing at `/root/.cache/ms-playwright/chromium_headless_shell-1217/chrome-headless-shel",
+      "recallCount": 9,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 9,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T14:10:25.263Z",
+      "lastRecalledAt": "2026-05-19T17:59:18.717Z",
+      "queryHashes": [
+        "42a3513847de",
+        "42ac0837d50b",
+        "52e2e7fcb522",
+        "fa3222e1b399",
+        "a92e9f0529cf",
+        "e133285a0bb9",
+        "6e72d59b188a",
+        "609695920d92",
+        "047772fae1f8"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "agent-teams",
+        "28-30",
+        "install/download",
+        "ubuntu26.04-x64",
+        "teams",
+        "phase",
+        "durable",
+        "flush"
+      ]
+    },
+    "memory:memory/2026-05-19.md:249:254": {
+      "key": "memory:memory/2026-05-19.md:249:254",
+      "path": "memory/2026-05-19.md",
+      "startLine": 249,
+      "endLine": 254,
+      "source": "memory",
+      "snippet": "- Starter includes README, intake form, requirements, acceptance criteria, architecture, ownership map, feature contract, Wave 1-4 task packets, PM acceptance report, requirements traceability matrix, cutover decision, retrospective, final verification report, and `app/.gitkeep` placeholder only. - Created Phase 38 evidence under `systems/agent-teams/examples/phase-38-v1-starter-packet/`. - Guardrails included: local-only default, PM Agent orchestrator-only, contract-first, preflight required for Local/Integration/Production, no silent dependency install, no deploy/cloud/DNS/billing/secrets without approval, no real browser/screenshot/a11y/visual claim without browser executable eviden",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T15:31:15.852Z",
+      "lastRecalledAt": "2026-05-19T15:31:15.852Z",
+      "queryHashes": [
+        "76e3e8111aca"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "1-4",
+        "local-only",
+        "orchestrator-only",
+        "contract-first",
+        "local/integration/production",
+        "deploy/cloud/dns/billing/secrets",
+        "browser/screenshot/a11y/visual",
+        "starter"
+      ]
+    },
+    "memory:memory/2026-05-19.md:252:257": {
+      "key": "memory:memory/2026-05-19.md:252:257",
+      "path": "memory/2026-05-19.md",
+      "startLine": 252,
+      "endLine": 257,
+      "source": "memory",
+      "snippet": "- Verify summary: coverage grep found 71 matches in 17 files, app placeholder only, no PM Agent/runtime diffs, no example app/src/tests/package diffs, no install/deploy process, `git diff --check` PASS. - Commit/push: `a760322 docs: add agent teams v1 project starter packet`. - Latest recommended next step: Phase 39 Option A — add starter packet usage link into root README + v1 operating guide/checklist, so `start new local project` points directly to starter packet. Docs-only; no runtime changes. - Current blockers remain: real browser automation/screenshot/a11y/visual proof blocked because Playwright Chromium install failed on `ubuntu26.04-x64`; browser executable missing at `/root/.ca",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T15:31:15.852Z",
+      "lastRecalledAt": "2026-05-19T15:31:15.852Z",
+      "queryHashes": [
+        "76e3e8111aca"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "agent/runtime",
+        "app/src/tests/package",
+        "install/deploy",
+        "commit/push",
+        "guide/checklist",
+        "docs-only",
+        "ubuntu26.04-x64",
+        "verify"
+      ]
+    },
+    "memory:memory/2026-05-19.md:273:287": {
+      "key": "memory:memory/2026-05-19.md:273:287",
+      "path": "memory/2026-05-19.md",
+      "startLine": 273,
+      "endLine": 287,
+      "source": "memory",
+      "snippet": "- Created `systems/agent-teams/runbooks/new-local-project-launch-runbook.md`. - Updated `systems/agent-teams/README.md`, `systems/agent-teams/runbooks/v1-local-project-operating-guide.md`, and `systems/agent-teams/runbooks/v1-local-project-checklist.md` to link/use launch runbook. - Added evidence under `systems/agent-teams/examples/phase-42-new-project-launch-runbook/`. - Verify: launch runbook grep `64 matches in 6 files`, no PM Agent/runtime/template/app/test/package diffs, no install/deploy process, `git diff --check` PASS. - Committed and pushed: `b87712d docs: add agent teams new project launch runbook`. - Important ongoing constraints: - Do not commit runtime memory files",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T16:36:44.544Z",
+      "lastRecalledAt": "2026-05-19T16:36:44.544Z",
+      "queryHashes": [
+        "becacbad94ab"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "systems/agent-teams/readme.md",
+        "link/use",
+        "install/deploy",
+        "created",
+        "systems",
+        "teams",
+        "runbooks",
+        "new"
+      ]
+    },
+    "memory:memory/2026-05-19.md:305:312": {
+      "key": "memory:memory/2026-05-19.md:305:312",
+      "path": "memory/2026-05-19.md",
+      "startLine": 305,
+      "endLine": 312,
+      "source": "memory",
+      "snippet": "- Updated `systems/agent-teams/README.md` and `systems/agent-teams/runbooks/v1-local-project-operating-guide.md` to mark Agent-Teams v1 as validated for controlled local pilots. - Closure summary: Phase 31-35 `mini-issue-tracker-v1` accepted; Phase 36-42 guide/starter/checklist/launch runbook hardened; Phase 43-46 `local-bookmarks-cli-v1` completed launch -> implementation -> Integration -> PM acceptance. - Current support: small local-only projects, PM Orchestrator-only, contract-first, starter-packet launch, preflight-gated implementation, owned-path specialist work, local Integration evidence, PM acceptance + traceability. - Still unsupported without new gates: production/deploy,",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T17:02:05.286Z",
+      "lastRecalledAt": "2026-05-19T17:02:05.286Z",
+      "queryHashes": [
+        "8201ea233bd9"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "systems/agent-teams/readme.md",
+        "agent-teams",
+        "31-35",
+        "mini-issue-tracker-v1",
+        "36-42",
+        "guide/starter/checklist/launch",
+        "43-46",
+        "local-bookmarks-cli-v1"
+      ]
+    },
+    "memory:memory/2026-05-19.md:298:306": {
+      "key": "memory:memory/2026-05-19.md:298:306",
+      "path": "memory/2026-05-19.md",
+      "startLine": 298,
+      "endLine": 306,
+      "source": "memory",
+      "snippet": "- Decision: `Accepted for controlled local pilot`. - Evidence: `reports/pm-acceptance-report.md`, `reports/requirements-traceability-matrix.md`, `reports/cutover-decision.md`, `reports/retrospective.md`, `reports/final-verification-report.md`, plus phase report under `systems/agent-teams/examples/phase-46-local-bookmarks-wave-4-acceptance/`. - Accepted claims: local Integration tested; CLI add/list/search/delete path verified locally; CLI negative/error cases verified locally; syntax checks passed; dependency-free Node.js local CLI implemented. - Rejected claims: production-ready, deployed, secure, performant, accessible, real browser tested, screenshot/visual proof, cloud-ready, mul",
+      "recallCount": 2,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 2,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T17:07:12.281Z",
+      "lastRecalledAt": "2026-05-19T17:10:36.622Z",
+      "queryHashes": [
+        "609695920d92",
+        "e9fdeba2c11e"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "reports/pm-acceptance-report.md",
+        "reports/cutover-decision.md",
+        "reports/retrospective.md",
+        "add/list/search/delete",
+        "negative/error",
+        "dependency-free",
+        "node.js",
+        "production-ready"
+      ]
+    },
+    "memory:memory/2026-05-19.md:227:241": {
+      "key": "memory:memory/2026-05-19.md:227:241",
+      "path": "memory/2026-05-19.md",
+      "startLine": 227,
+      "endLine": 241,
+      "source": "memory",
+      "snippet": "## 2026-05-19 15:29 UTC — Runtime flush: Agent-Teams Phases 35-38 - Phase 35 Option A completed: PM Acceptance + v1 Pilot Retrospective for `mini-issue-tracker-v1`. - Created PM acceptance artifacts under `systems/agent-teams/examples/phase-32-mini-issue-tracker-real-pilot/reports/phase-35-pm-acceptance/`. - PM decision: `ACCEPTED for controlled local pilot`. - Accepted claims: `local Integration tested`, `HTTP API/UI path verified locally`, `Agent-Teams v1 clean-slate local pilot accepted`. - Requirements traceability passed for create/list/HTML UI/validation and local-only/no DB/no auth/no install/no browser-claim boundaries. - No app code/tests/PM Agent/runtime/template changes",
+      "recallCount": 2,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 2,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T17:14:04.715Z",
+      "lastRecalledAt": "2026-05-20T13:34:24.072Z",
+      "queryHashes": [
+        "2d98a04197fe",
+        "5b8a065338b6"
+      ],
+      "recallDays": [
+        "2026-05-19",
+        "2026-05-20"
+      ],
+      "conceptTags": [
+        "agent-teams",
+        "35-38",
+        "mini-issue-tracker-v1",
+        "api/ui",
+        "clean-slate",
+        "create/list/html",
+        "ui/validation",
+        "local-only/no"
+      ]
+    },
+    "memory:memory/2026-05-19.md:240:250": {
+      "key": "memory:memory/2026-05-19.md:240:250",
+      "path": "memory/2026-05-19.md",
+      "startLine": 240,
+      "endLine": 250,
+      "source": "memory",
+      "snippet": "- Guardrails documented: PM Agent orchestrator-only, Verification Level and evidence claim rules, preflight required for Local/Integration/Production, browser executable/install approval gate, deploy/production approval gate, commit hygiene. - Commit/push: `c02603c docs: add agent teams v1 local project operating guide`. - Phase 37 Option A completed: v1 guide index wiring. - Updated `systems/agent-teams/README.md` with `Quick Start — New Local Project`, links to `runbooks/v1-local-project-operating-guide.md` and `runbooks/v1-local-project-checklist.md`, `runbooks/` in directory map, and build order through Phase 37. - Created Phase 37 evidence under `systems/agent-teams/examples/pha",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T17:14:04.715Z",
+      "lastRecalledAt": "2026-05-19T17:14:04.715Z",
+      "queryHashes": [
+        "2d98a04197fe"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "orchestrator-only",
+        "local/integration/production",
+        "executable/install",
+        "deploy/production",
+        "commit/push",
+        "systems/agent-teams/readme.md",
+        "systems/agent-teams/examples/pha",
+        "guardrails"
+      ]
+    },
+    "memory:memory/2026-05-19.md:181:190": {
+      "key": "memory:memory/2026-05-19.md:181:190",
+      "path": "memory/2026-05-19.md",
+      "startLine": 181,
+      "endLine": 190,
+      "source": "memory",
+      "snippet": "- Phase 30 Option A completed: Agent-Teams Readiness Review + v1 Cutover Plan. Created readiness matrix, known blockers, v1 cutover plan, first real project adoption runbook, verification report under `systems/agent-teams/examples/phase-30-readiness-review/`. Commit: `27ab429 docs: add agent teams phase 30 readiness review` pushed to `master`. - Phase 30 conclusion: Agent-Teams ready for v1 controlled real-project pilot under guardrails: local-only default, no deploy, no secrets, no cloud/DNS/billing, preflight required for Local/Integration/Production, API contract before FE/BE parallel. Real browser automation/screenshot/a11y/visual proof remains Blocked. Browser-like fallback and `node --",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T17:14:04.715Z",
+      "lastRecalledAt": "2026-05-19T17:14:04.715Z",
+      "queryHashes": [
+        "2d98a04197fe"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "agent-teams",
+        "real-project",
+        "local-only",
+        "cloud/dns/billing",
+        "local/integration/production",
+        "fe/be",
+        "browser-like",
+        "phase"
+      ]
+    },
+    "memory:memory/2026-05-19.md:335:353": {
+      "key": "memory:memory/2026-05-19.md:335:353",
+      "path": "memory/2026-05-19.md",
+      "startLine": 335,
+      "endLine": 353,
+      "source": "memory",
+      "snippet": "- Report covers final status, what was built, operating model, canonical entry points, phase summary 0-50, pilot evidence, supported use cases, unsupported use cases without v2 gates, known blockers, quality gates, operational recommendation, v2 roadmap summary, final decision. - Commit/push: `e5948a2 docs: add agent teams v1 final report`. - Tag created/pushed: `agent-teams-v1` pointing to `e5948a2`. - User asked for an overview introduction report with images for content. - Created `systems/agent-teams/reports/agent-teams-overview-report.md`. - Created SVG image assets under `systems/agent-teams/reports/assets/`: - `agent-teams-overview.svg` — PM Orchestrator + specialist age",
+      "recallCount": 9,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 9,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T17:47:16.603Z",
+      "lastRecalledAt": "2026-05-19T20:10:10.896Z",
+      "queryHashes": [
+        "312fc834e192",
+        "5a6809f00092",
+        "0d480a9879b9",
+        "a2e4b462fed5",
+        "90081758ba48",
+        "35848cd4752f",
+        "2801b2ef61e3",
+        "2a547e1a42a0",
+        "c1b5bd52c7e7"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "0-50",
+        "commit/push",
+        "created/pushed",
+        "agent-teams-v1",
+        "agent-teams-overview.svg",
+        "report",
+        "covers",
+        "final"
+      ]
+    },
+    "memory:memory/2026-05-19.md:390:413": {
+      "key": "memory:memory/2026-05-19.md:390:413",
+      "path": "memory/2026-05-19.md",
+      "startLine": 390,
+      "endLine": 413,
+      "source": "memory",
+      "snippet": "- Policy covers package metadata files, expected/unexpected lockfile changes, missing lockfile, package-manager switch, install provenance log, rejection rules, claim boundaries, and rollback requirements. - Commit/push: `3843ffe docs: add agent teams lockfile provenance policy`. - Phase 55 completed: starter/runbook wiring. - Created `systems/agent-teams/v2/dependency-governance/starter-runbook-wiring.md`. - Created `systems/agent-teams/v2/dependency-governance/reports/phase-55-verification-report.md`. - Updated v1/v2 entrypoint docs to reference dependency governance: - `systems/agent-teams/runbooks/new-local-project-launch-runbook.md` - `systems/agent-teams/runbooks/v1-l",
+      "recallCount": 8,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 8,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T18:20:20.356Z",
+      "lastRecalledAt": "2026-05-19T19:44:34.247Z",
+      "queryHashes": [
+        "0d480a9879b9",
+        "1f20b018ac6b",
+        "a2e4b462fed5",
+        "1b929820226a",
+        "61f89085be8e",
+        "f4bbcd783a43",
+        "2801b2ef61e3",
+        "cc0c6177b1d4"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "expected/unexpected",
+        "package-manager",
+        "commit/push",
+        "starter/runbook",
+        "v1/v2",
+        "policy",
+        "covers",
+        "package"
+      ]
+    },
+    "memory:memory/2026-05-19.md:322:337": {
+      "key": "memory:memory/2026-05-19.md:322:337",
+      "path": "memory/2026-05-19.md",
+      "startLine": 322,
+      "endLine": 337,
+      "source": "memory",
+      "snippet": "- Commit/push: `1832d06 docs: wire agent teams cli testing patterns into runbooks`. - Phase 50 Option A completed: created v1 final status + v2 roadmap. - Created `systems/agent-teams/examples/phase-50-v1-final-status-v2-roadmap/README.md`. - Created `systems/agent-teams/examples/phase-50-v1-final-status-v2-roadmap/v1-final-status.md`. - Created `systems/agent-teams/examples/phase-50-v1-final-status-v2-roadmap/v2-roadmap.md`. - Created `systems/agent-teams/examples/phase-50-v1-final-status-v2-roadmap/reports/phase-50-verification-report.md`. - Updated `systems/agent-teams/README.md` with final v1 status and v2 roadmap links. - Final v1 status: `v1 validated for controlled local",
+      "recallCount": 2,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 2,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T18:20:20.356Z",
+      "lastRecalledAt": "2026-05-19T18:24:35.106Z",
+      "queryHashes": [
+        "0d480a9879b9",
+        "a2e4b462fed5"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "commit/push",
+        "systems/agent-teams/readme.md",
+        "commit",
+        "push",
+        "1832d06",
+        "docs",
+        "wire",
+        "teams"
+      ]
+    },
+    "memory:memory/2026-05-19.md:455:470": {
+      "key": "memory:memory/2026-05-19.md:455:470",
+      "path": "memory/2026-05-19.md",
+      "startLine": 455,
+      "endLine": 470,
+      "source": "memory",
+      "snippet": "- Demonstrated pack choice and evidence expectation without implementation/install/deploy. - Commit/push: `8f71603 docs: add agent teams pack selection dry run`. - Track 2 Project Type Packs current status: complete at docs/simulated level. - Verification for Phase 58-65 reported: - `git diff --check`: PASS. - no install/download. - no package metadata/lockfile change. - no app/test code change. - no PM Agent change. - no runtime protocol change. - no deploy/cloud/DNS/billing/secrets. - HEAD pushed: `8f71603 (origin/master) docs: add agent teams pack selection dry run`. - Suggested next: Track 3 — Security / Performance Evidence Gates, Phase 66 Option A — Security / Perfo",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T18:35:26.117Z",
+      "lastRecalledAt": "2026-05-19T18:35:26.117Z",
+      "queryHashes": [
+        "c0e3952f448e"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "implementation/install/deploy",
+        "commit/push",
+        "docs/simulated",
+        "58-65",
+        "install/download",
+        "metadata/lockfile",
+        "app/test",
+        "deploy/cloud/dns/billing/secrets"
+      ]
+    },
+    "memory:memory/2026-05-19.md:349:368": {
+      "key": "memory:memory/2026-05-19.md:349:368",
+      "path": "memory/2026-05-19.md",
+      "startLine": 349,
+      "endLine": 368,
+      "source": "memory",
+      "snippet": "- Canonical report: `systems/agent-teams/reports/agent-teams-v1-report.md`. - Overview report with diagrams: `systems/agent-teams/reports/agent-teams-overview-report.md`. - Latest commit: `bffd796 docs: add agent teams overview report`. - Tag: `agent-teams-v1` remains at `e5948a2`; overview report commit is after the v1 tag. - Important limits/blockers remain: - Real browser proof remains blocked; prior `npx playwright install chromium` failed because Playwright does not support chromium on `ubuntu26.04-x64`. - Missing executable: `/root/.cache/ms-playwright/chromium_headless_shell-1217/chrome-headless-shell-linux64/chrome-headless-shell`. - No browser/screenshot/a11y/visual cl",
+      "recallCount": 2,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 2,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T19:13:50.522Z",
+      "lastRecalledAt": "2026-05-20T13:34:24.072Z",
+      "queryHashes": [
+        "1b929820226a",
+        "5b8a065338b6"
+      ],
+      "recallDays": [
+        "2026-05-19",
+        "2026-05-20"
+      ],
+      "conceptTags": [
+        "agent-teams-v1",
+        "limits/blockers",
+        "ubuntu26.04-x64",
+        "browser/screenshot/a11y/visual",
+        "canonical",
+        "report",
+        "systems",
+        "teams"
+      ]
+    },
+    "memory:memory/2026-05-19.md:364:382": {
+      "key": "memory:memory/2026-05-19.md:364:382",
+      "path": "memory/2026-05-19.md",
+      "startLine": 364,
+      "endLine": 382,
+      "source": "memory",
+      "snippet": "- User requested Agent-Teams v2 work: Phase 51 Option A, Phase 52 Option A, then asked to continue through Phase 55. - Phase 51 Option A completed: v2 Dependency / Toolchain Governance plan. - Created `systems/agent-teams/v2/README.md`. - Created `systems/agent-teams/v2/roadmap.md`. - Created `systems/agent-teams/v2/dependency-governance/plan.md`. - Created `systems/agent-teams/v2/dependency-governance/acceptance-criteria.md`. - Created `systems/agent-teams/v2/dependency-governance/reports/phase-51-verification-report.md`. - Updated `systems/agent-teams/README.md` with v2 entry points and build order. - Commit/push: `c3587c5 docs: add agent teams v2 dependency governance plan`.",
+      "recallCount": 2,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 2,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T19:19:34.580Z",
+      "lastRecalledAt": "2026-05-19T19:27:06.471Z",
+      "queryHashes": [
+        "a763205a2b14",
+        "5ebcdf59f146"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "agent-teams",
+        "systems/agent-teams/v2/readme.md",
+        "systems/agent-teams/readme.md",
+        "commit/push",
+        "requested",
+        "teams",
+        "phase",
+        "option"
+      ]
+    },
+    "memory:memory/2026-05-19.md:577:586": {
+      "key": "memory:memory/2026-05-19.md:577:586",
+      "path": "memory/2026-05-19.md",
+      "startLine": 577,
+      "endLine": 586,
+      "source": "memory",
+      "snippet": "- Commit/push: `9d96282 docs: add agent teams parallel wave readiness checklist`. - Phase 85 completed: ownership conflict escalation protocol. - Created `systems/agent-teams/v2/multi-agent-execution-quality/ownership-conflict-escalation-protocol.md`. - Created `systems/agent-teams/v2/multi-agent-execution-quality/reports/phase-85-verification-report.md`. - Updated Track 5 plan, acceptance criteria, and v2 roadmap. - Protocol covers conflict definition, severity Low/Medium/High/Critical, detection points, escalation record, resolution options, forbidden shortcuts, sequencing rule, PM decision matrix, and evidence index update requirements. - Key rules: same source/contract path i",
+      "recallCount": 1,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 1,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T19:55:13.674Z",
+      "lastRecalledAt": "2026-05-19T19:55:13.674Z",
+      "queryHashes": [
+        "8c5423164cb2"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "commit/push",
+        "low/medium/high/critical",
+        "source/contract",
+        "commit",
+        "push",
+        "9d96282",
+        "docs",
+        "add"
+      ]
+    },
+    "memory:memory/2026-05-19.md:555:569": {
+      "key": "memory:memory/2026-05-19.md:555:569",
+      "path": "memory/2026-05-19.md",
+      "startLine": 555,
+      "endLine": 569,
+      "source": "memory",
+      "snippet": "- Created `systems/agent-teams/v2/browser-ui-evidence-recovery/reports/phase-81-verification-report.md`. - Updated `systems/agent-teams/v2/README.md` and `systems/agent-teams/v2/roadmap.md`. - Decision: Track 4 accepted at docs/simulated level; Production/browser-ready = No; real browser proof remains Blocked; browser-like fallback allowed only when labelled fallback. - Commit/push: `8556bf7 docs: close agent teams browser ui recovery track`. - Phase 82 completed: Track 5 Multi-Agent Execution Quality plan. - Created `systems/agent-teams/v2/multi-agent-execution-quality/plan.md`. - Created `systems/agent-teams/v2/multi-agent-execution-quality/acceptance-criteria.md`. - Created",
+      "recallCount": 9,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 9,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T19:57:34.815Z",
+      "lastRecalledAt": "2026-05-19T20:31:13.594Z",
+      "queryHashes": [
+        "c3d9233b4be5",
+        "2a547e1a42a0",
+        "23c2f2cb3f2a",
+        "c1b5bd52c7e7",
+        "3b4d83be9901",
+        "800ad39faf77",
+        "6760c38fcfc3",
+        "095793617108",
+        "f922e31f60ac"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "systems/agent-teams/v2/readme.md",
+        "docs/simulated",
+        "production/browser-ready",
+        "browser-like",
+        "commit/push",
+        "multi-agent",
+        "created",
+        "systems"
+      ]
+    },
+    "memory:memory/2026-05-19.md:566:580": {
+      "key": "memory:memory/2026-05-19.md:566:580",
+      "path": "memory/2026-05-19.md",
+      "startLine": 566,
+      "endLine": 580,
+      "source": "memory",
+      "snippet": "- Phase 83 completed: cross-agent evidence index template. - Created `systems/agent-teams/v2/multi-agent-execution-quality/templates/cross-agent-evidence-index-template.md`. - Created `systems/agent-teams/v2/multi-agent-execution-quality/reports/phase-83-verification-report.md`. - Updated Track 5 plan, acceptance criteria, and v2 roadmap. - Template creates one PM-owned evidence index linking every specialist claim to evidence path/output, verification level, owned paths, blockers, claim boundary, and PM decision. - Commit/push: `e83abb0 docs: add agent teams cross-agent evidence index`. - Phase 84 completed: parallel wave readiness v2 checklist. - Created `systems/agent-teams/v2",
+      "recallCount": 8,
+      "dailyCount": 0,
+      "groundedCount": 0,
+      "totalScore": 8,
+      "maxScore": 1,
+      "firstRecalledAt": "2026-05-19T19:57:34.815Z",
+      "lastRecalledAt": "2026-05-19T20:31:13.594Z",
+      "queryHashes": [
+        "c3d9233b4be5",
+        "2a547e1a42a0",
+        "c1b5bd52c7e7",
+        "3b4d83be9901",
+        "800ad39faf77",
+        "6760c38fcfc3",
+        "095793617108",
+        "f922e31f60ac"
+      ],
+      "recallDays": [
+        "2026-05-19"
+      ],
+      "conceptTags": [
+        "cross-agent",
+        "pm-owned",
+        "path/output",
+        "commit/push",
+        "systems/agent-teams/v2",
+        "phase",
+        "completed",
+        "cross"
+      ]
+    }
+  }
+}

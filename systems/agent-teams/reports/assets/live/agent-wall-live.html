@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agent Wall Live</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 14px; background:#0b1020; color:#e5e7eb; }
+    h1 { margin: 0 0 8px; }
+    .sub { color:#94a3b8; margin-bottom: 12px; }
+    .grid { display:grid; grid-template-columns: repeat(3,1fr); gap:10px; }
+    .card { border:1px solid #334155; border-radius:10px; background:#111827; padding:10px; }
+    .title { font-weight:700; margin-bottom:6px; }
+    pre { background:#020617; border:1px solid #1e293b; border-radius:8px; padding:8px; min-height:170px; white-space:pre-wrap; }
+    .timeline { margin-top:10px; }
+    .ok{color:#22c55e} .warn{color:#f59e0b} .info{color:#38bdf8}
+  </style>
+</head>
+<body>
+  <h1>Agent Wall Live</h1>
+  <div class="sub">Auto-refresh mỗi 2 giây. Quan sát ACK -> WORKING -> DONE theo từng agent.</div>
+
+  <div class="grid">
+    <div class="card"><div class="title">Requirements Agent</div><pre id="req">loading...</pre></div>
+    <div class="card"><div class="title">Backend Agent</div><pre id="be">loading...</pre></div>
+    <div class="card"><div class="title">QA Agent</div><pre id="qa">loading...</pre></div>
+  </div>
+
+  <div class="card timeline">
+    <div class="title">PM Timeline / Handoff</div>
+    <pre id="tl">loading...</pre>
+  </div>
+
+<script>
+async function loadText(path, el){
+  try{
+    const r = await fetch(path + '?t=' + Date.now());
+    const tx = await r.text();
+    document.getElementById(el).textContent = tx;
+  }catch(e){
+    document.getElementById(el).textContent = 'load error: ' + e;
+  }
+}
+async function tick(){
+  await Promise.all([
+    loadText('./logs/requirements.log','req'),
+    loadText('./logs/backend.log','be'),
+    loadText('./logs/qa.log','qa'),
+    loadText('./logs/timeline.log','tl')
+  ]);
+}
+setInterval(tick, 2000);
+tick();
+</script>
+</body>
+</html>

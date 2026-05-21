@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "skills": {
+    "md-to-pdf-cjk": {
+      "version": "1.0.0",
+      "installedAt": 1778117456103
+    },
+    "markdown-to-pdf-styled": {
+      "version": "1.0.0",
+      "installedAt": 1778117456119
+    }
+  }
+}

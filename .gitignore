@@ -1,0 +1,80 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+
+# Production
+build/
+dist/
+
+# Misc
+.DS_Store
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+
+# OpenClaw workspace specific
+.openclaw/workspace-state.json
+
+# Runtime voice artifacts
+ops/tmp/voice/about-doanh.*
+ops/tmp/voice/transcribe_about_doanh.py
+ops/tmp/voice/generated/*.mp3
+ops/tmp/voice/generated/*.ogg
+ops/tmp/voice/generated/*.txt
+ops/tmp/voice/transcripts/*-runner.py
+ops/tmp/voice/transcripts/*.md
+
+# Keep directory structure
+!ops/tmp/voice/.gitkeep
+!ops/tmp/voice/incoming/.gitkeep
+!ops/tmp/voice/generated/.gitkeep
+!ops/tmp/voice/transcripts/.gitkeep
+
+# Image artifacts
+ops/tmp/image/*
+!ops/tmp/image/.gitkeep
+
+# State cache
+ops/state/cache/*
+!ops/state/cache/.gitkeep
+
+# Exports (keep structure, ignore content)
+ops/exports/**/*.zip
+ops/exports/**/*.tar.gz
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+.pytest_cache/
+
+# Trash
+.trash/

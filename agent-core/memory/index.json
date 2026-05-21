@@ -1,0 +1,87 @@
+{
+  "lastUpdated": "2026-04-25T00:13:00Z",
+  "version": "1.1",
+  "entries": [
+    {
+      "id": "obs-001",
+      "type": "identity",
+      "title": "Lệ - Trợ lý AI",
+      "date": "2026-04-24",
+      "tags": ["identity", "self", "bootstrap"],
+      "file": "IDENTITY.md",
+      "keywords": ["Lệ", "trợ lý", "AI", "giọt nước"]
+    },
+    {
+      "id": "obs-002",
+      "type": "person",
+      "title": "Nguyễn Thành Doanh - Anh Doanh",
+      "date": "2026-04-24",
+      "tags": ["person", "user", "huecit", "internship"],
+      "file": "memory/observations/preferences.md",
+      "keywords": ["Doanh", "sinh viên", "kỹ nghệ phần mềm", "HUECIT"]
+    },
+    {
+      "id": "obs-003",
+      "type": "project",
+      "title": "HUECIT Internship",
+      "date": "2026-04-24",
+      "tags": ["work", "internship", "project", "current"],
+      "file": "memory/observations/projects.md",
+      "keywords": ["HUECIT", "thực tập", "internship", "Huế"]
+    },
+    {
+      "id": "obs-004",
+      "type": "environment",
+      "title": "Môi trường làm việc - WSL + Docker",
+      "date": "2026-04-24",
+      "tags": ["environment", "tools", "docker", "wsl"],
+      "file": "memory/observations/tools.md",
+      "keywords": ["Lenovo", "WSL", "Ubuntu", "Docker", "openclawgateway"]
+    },
+    {
+      "id": "obs-005",
+      "type": "lesson",
+      "title": "Cấu trúc bộ nhớ từ claude-mem",
+      "date": "2026-04-24",
+      "tags": ["lesson", "memory", "architecture", "bootstrap"],
+      "file": "memory/observations/lessons.md",
+      "keywords": ["claude-mem", "memory", "progressive disclosure", "structure"]
+    },
+    {
+      "id": "obs-006",
+      "type": "daily",
+      "title": "Ghi chép 2026-04-24 - Khởi tạo Lệ",
+      "date": "2026-04-24",
+      "tags": ["daily", "bootstrap", "log"],
+      "file": "memory/daily/2026-04-24.md",
+      "keywords": ["bootstrap", "khởi tạo", "claude-mem", "memory schema"]
+    },
+    {
+      "id": "obs-007",
+      "type": "project",
+      "title": "Web Bán Hàng MVP do PM Agent quản lý",
+      "date": "2026-04-24",
+      "tags": ["project", "pm-agent", "ecommerce", "demo"],
+      "file": "memory/observations/pm-projects.md",
+      "keywords": ["web bán hàng", "pm agent", "demo-ready", "HUECIT"]
+    },
+    {
+      "id": "obs-008",
+      "type": "lesson",
+      "title": "Không suy đoán lỗi khi chưa rà source và console",
+      "date": "2026-04-24",
+      "tags": ["lesson", "debugging", "mistake", "workflow"],
+      "file": "memory/observations/lessons.md",
+      "keywords": ["runtime error", "console", "index.html", "lucide-react", "category mismatch"]
+    },
+    {
+      "id": "obs-009",
+      "type": "daily",
+      "title": "Nhật ký 2026-04-24 - Hoàn thành PM Agent + Web Bán Hàng",
+      "date": "2026-04-24",
+      "tags": ["daily", "project", "pm-agent", "web-ban-hang"],
+      "file": "memory/2026-04-24.md",
+      "keywords": ["17/33", "19/33", "demo", "mongo", "frontend crash", "lessons learned"]
+    }
+  ]
+}

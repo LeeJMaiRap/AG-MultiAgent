@@ -1,0 +1,11 @@
+{
+  "name": "mini-issue-tracker-v1",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "build": "node --check src/issue-api.js && node --check src/issue-ui.js && node --check src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test tests/server.test.js"
+  }
+}

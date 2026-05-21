@@ -1,0 +1,87 @@
+project_id: web-ban-hang
+name: Trang Web Bán Hàng
+code: WH-2026-04-24
+status: on-hold
+mode: demo
+priority: medium
+
+owner: Nguyễn Thành Doanh
+pm_agent: Lệ
+created_at: 2026-04-24T20:21:00Z
+updated_at: 2026-05-15T06:58:00Z
+
+source_of_truth: projects/on-hold/web-ban-hang
+
+objectives:
+  - Xây dựng trang web bán hàng hoàn chỉnh
+  - Phục vụ 1000+ sản phẩm và 500 người dùng
+  - Giao diện đẹp, responsive
+  - MVP hoàn thành trong 24 giờ
+
+constraints:
+  - timeline: 1 ngày (24 giờ)
+  - budget: không xác định (dự án cá nhân)
+  - technology: React + Node.js + MongoDB
+  - resources: PM Agent + Worker Agent
+
+stakeholders:
+  - role: Owner
+    name: Nguyễn Thành Doanh
+    responsibility: Phê duyệt yêu cầu, nghiệm thu
+  - role: PM Agent
+    name: Lệ
+    responsibility: Quản lý dự án, điều phối
+  - role: Worker Agent
+    name: "-"
+    responsibility: Thực thi code, tạo tài liệu
+
+artifacts:
+  charter: 01-initiation/charter.md
+  requirements: 01-initiation/requirements.md
+  spec: 02-planning/spec.md
+  plan: 02-planning/plan.md
+  rules: 02-planning/rules.md
+  wbs: 02-planning/wbs.md
+  schedule: 02-planning/schedule.md
+  risk_register: 02-planning/risk-register.md
+  task_board: 03-execution/task-board.md
+  issue_log: 03-execution/issue-log.md
+  change_log: 03-execution/change-log.md
+  status_dashboard: 04-monitoring/status-dashboard.md
+  lessons_learned: lessons-learned.md
+
+phases:
+  - id: 1
+    name: Setup & Backend Foundation
+    status: completed
+    progress: 100%
+  - id: 2
+    name: Frontend - Trang chủ & Danh sách
+    status: completed
+    progress: 100%
+  - id: 3
+    name: Frontend - Chi tiết & Giỏ hàng
+    status: completed
+    progress: 100%
+  - id: 4
+    name: Frontend - Thanh toán & Tài khoản
+    status: completed
+    progress: 100%
+  - id: 5
+    name: Admin & Final touches
+    status: in_progress
+    progress: 80%
+
+metrics:
+  total_tasks: 33
+  completed_tasks: 19
+  completion_percentage: 58
+  spi: 1.0
+  cpi: 1.0
+
+tags:
+  - web
+  - ecommerce
+  - mvp
+  - demo
+  - validation

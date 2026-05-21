@@ -1,0 +1,26 @@
+{
+  "name": "agent-wall-chat",
+  "version": "1.0.0",
+  "description": "Agent wall chat MVP with dynamic agent windows and demo orchestration",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node tests/smoke.js"
+  },
+  "keywords": [
+    "agent",
+    "chat",
+    "orchestration"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dagre": "^0.8.5",
+    "express": "^5.2.1",
+    "multer": "^2.1.1",
+    "openai": "^6.38.0",
+    "socket.io": "^4.8.3"
+  }
+}

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agent Wall - Live View</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 16px; background: #0f172a; color: #e2e8f0; }
+    h1 { margin: 0 0 12px; font-size: 22px; }
+    .meta { color: #94a3b8; margin-bottom: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .card { background: #111827; border: 1px solid #334155; border-radius: 10px; padding: 12px; }
+    .title { font-size: 16px; margin-bottom: 8px; }
+    .status { font-weight: bold; margin-bottom: 8px; }
+    .ok { color: #22c55e; }
+    .work { color: #f59e0b; }
+    .ack { color: #38bdf8; }
+    .log { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 8px; min-height: 140px; white-space: pre-wrap; }
+    .row { margin-top: 14px; }
+    code { color: #93c5fd; }
+  </style>
+</head>
+<body>
+  <h1>Agent Wall (Fallback Visibility)</h1>
+  <div class="meta">Purpose: tách biệt hoạt động 3 agent khi Web UI không hiện subagent sessions.</div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="title">Requirements Agent</div>
+      <div class="status ok">Status: DONE</div>
+      <div class="log">[Requirements Agent] ACK task visibility-test-01
+[Requirements Agent] WORKING task visibility-test-01
+[Requirements Agent] DONE task visibility-test-01</div>
+      <div class="row"><code>session: agent:main:subagent:90180aae-89db-4ed0-9df2-e8ff674b0451</code></div>
+    </div>
+
+    <div class="card">
+      <div class="title">Backend Agent</div>
+      <div class="status ok">Status: DONE</div>
+      <div class="log">[Backend Agent] ACK task visibility-test-01
+[Backend Agent] WORKING task visibility-test-01
+[Backend Agent] DONE task visibility-test-01</div>
+      <div class="row"><code>session: agent:main:subagent:57ba1981-6e10-4778-a1a4-797018a2462c</code></div>
+    </div>
+
+    <div class="card">
+      <div class="title">QA Agent</div>
+      <div class="status ok">Status: DONE</div>
+      <div class="log">[QA Agent] ACK task visibility-test-01
+[QA Agent] WORKING task visibility-test-01
+[QA Agent] DONE task visibility-test-01</div>
+      <div class="row"><code>session: agent:main:subagent:17586794-6e41-403e-84b7-853c12443baa</code></div>
+    </div>
+  </div>
+
+  <div class="row">
+    <strong>Handoff map:</strong>
+    <div class="log">Requirements Agent -> Backend Agent -> QA Agent -> PM Summary</div>
+  </div>
+</body>
+</html>

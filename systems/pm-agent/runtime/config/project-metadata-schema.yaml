@@ -1,0 +1,105 @@
+# Project Metadata Schema
+# Định nghĩa cấu trúc chuẩn cho project.yaml
+
+version: "1.0"
+description: "Schema for PM Agent project metadata"
+
+required_fields:
+  - project_id
+  - name
+  - status
+  - owner
+  - pm_agent
+  - created_at
+  - source_of_truth
+
+fields:
+  project_id:
+    type: string
+    description: "Unique identifier (slug format)"
+    pattern: "^[a-z0-9-]+$"
+    example: "web-ban-hang"
+
+  name:
+    type: string
+    description: "Human-readable project name"
+    example: "Trang Web Bán Hàng"
+
+  code:
+    type: string
+    description: "Project code (optional)"
+    example: "WH-2026-04-24"
+
+  status:
+    type: enum
+    values: [active, on-hold, archived, cancelled]
+    description: "Current project status"
+
+  mode:
+    type: enum
+    values: [demo, pilot, production]
+    description: "Project mode"
+
+  priority:
+    type: enum
+    values: [critical, high, medium, low]
+    description: "Project priority"
+
+  owner:
+    type: string
+    description: "Project owner/sponsor name"
+
+  pm_agent:
+    type: string
+    description: "PM Agent name"
+
+  created_at:
+    type: datetime
+    format: "ISO 8601"
+    example: "2026-04-24T20:21:00Z"
+
+  updated_at:
+    type: datetime
+    format: "ISO 8601"
+
+  source_of_truth:
+    type: string
+    description: "Relative path to project directory"
+    example: "projects/active/web-ban-hang"
+
+  objectives:
+    type: array
+    description: "List of project objectives"
+
+  constraints:
+    type: object
+    description: "Project constraints"
+
+  stakeholders:
+    type: array
+    description: "List of stakeholders"
+    item_schema:
+      role: string
+      name: string
+      responsibility: string
+
+  artifacts:
+    type: object
+    description: "Mapping of artifact types to file paths"
+
+  phases:
+    type: array
+    description: "Project phases"
+    item_schema:
+      id: integer
+      name: string
+      status: enum [not_started, in_progress, completed, blocked]
+      progress: integer
+
+  metrics:
+    type: object
+    description: "Project metrics"
+
+  tags:
+    type: array
+    description: "Project tags for categorization"

@@ -1,0 +1,12 @@
+{
+  "nextId": 3,
+  "todos": [
+    {
+      "id": 1,
+      "text": "task A",
+      "completed": true,
+      "createdAt": "2026-05-20T13:44:02.935Z",
+      "completedAt": "2026-05-20T13:44:03.053Z"
+    }
+  ]
+}
