@@ -1,0 +1,23 @@
+{
+  "main-agent": [
+    {
+      "ts": "2026-05-21T16:19:28.565429",
+      "role": "user",
+      "text": "xin chào",
+      "type": "chat"
+    },
+    {
+      "ts": "2026-05-21T16:19:37.733940",
+      "role": "agent",
+      "text": "Xin chào! Mình là Agent Chính của hệ thống MTA. Rất vui được hỗ trợ bạn 😊\n\nBạn cần mình giúp gì hôm nay? Nếu bạn có yêu cầu về một dự án, hãy mô tả càng chi tiết càng tốt để mình có thể chuyển tiếp cho PM Agent xử lý phù hợp.",
+      "type": "chat",
+      "stream": false
+    }
+  ],
+  "pm-orchestrator": [],
+  "product-agent": [],
+  "architecture-agent": [],
+  "frontend-agent": [],
+  "backend-agent": [],
+  "qa-agent": []
+}

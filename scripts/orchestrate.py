@@ -205,7 +205,7 @@ class OrchestratorRegistry:
 
     def _register_default_agents(self):
         defaults = [
-            ("main-agent", "Agent Chính (AG2.0)", "Primary AI Assistant & Coordinator", "cx/gpt-5.5"),
+            ("main-agent", "LeeJ CEO", "Primary AI Assistant & Coordinator", "cx/gpt-5.5"),
             ("pm-orchestrator", "PM Agent", "Orchestrator / Project Manager", "cx/gpt-5.5"),
             ("product-agent", "Product Agent", "Requirements & PRD", "cx/gpt-5.5"),
             ("architecture-agent", "Architecture Agent", "System Design & API", "cx/gpt-5.5"),
@@ -465,28 +465,34 @@ def run_agent(agent_name: str, task_desc: str, mock: bool = True,
         else:
             content = _real_output(agent_name, task_desc, prompt, model_name, tools)
 
-        # Check if PM Agent is asking questions (Q&A Bridge)
-        if agent_name == "pm-orchestrator" and "[PM_REQUEST]" in content:
-            question = content.replace("[PM_REQUEST]", "").strip()
+        # Check if any Agent is asking questions (Q&A Bridge)
+        qa_token = None
+        if "[PM_REQUEST]" in content:
+            qa_token = "[PM_REQUEST]"
+        elif "[USER_REQUEST]" in content:
+            qa_token = "[USER_REQUEST]"
+            
+        if qa_token:
+            question = content.replace(qa_token, "").strip()
             
             # Reset event and block
             PM_ANSWER_EVENT.clear()
             
-            # Send question to Main Agent for user to see
+            # Send question to LeeJ CEO for user to see, append dynamic Q&A Bridge token
             registry.add_agent_message(
                 "main-agent", "agent",
-                f"❓ **[Q&A Bridge] PM Agent đang hỏi:**\n\n{question}\n\n*Hãy trả lời ở khung chat của PM Agent.*",
+                f"❓ **[Q&A Bridge] {registry.agents[agent_name].display_name} đang hỏi:**\n\n{question}\n\n[QA_BRIDGE_QUESTION:{agent_name}]",
                 "chat"
             )
             
-            # Add message from PM Agent itself to show in PM tab
-            registry.add_agent_message("pm-orchestrator", "agent", f"**[PM_REQUEST]** {question}", "chat")
+            # Add message from the agent itself to show in its tab
+            registry.add_agent_message(agent_name, "agent", f"**{qa_token}** {question}", "chat")
             
-            log(f"[Q&A Bridge] PM Agent is waiting for user answer to: {question[:50]}...", Colors.YELLOW)
+            log(f"[Q&A Bridge] Agent {agent_name} is waiting for user answer to: {question[:50]}...", Colors.YELLOW)
             PM_ANSWER_EVENT.wait()
             
-            # Post the user's answer back to PM Agent's chat log
-            registry.add_agent_message("pm-orchestrator", "user", PM_ANSWER_TEXT, "chat")
+            # Post the user's answer back to the asking Agent's chat log
+            registry.add_agent_message(agent_name, "user", PM_ANSWER_TEXT, "chat")
             
             # Call Codex again (or mock) with the answer
             if mock:
@@ -729,23 +735,55 @@ def run_agent_with_fallback(agent_name: str, task_desc: str, mock: bool = True, 
             "error"
         )
         
-        fallback_prompt = (
-            f"Là PM Orchestrator điều phối MTA, phân hệ con '{agent_name}' của bạn vừa gặp sự cố kết nối hoặc lỗi phân tích ({e}).\n"
-            f"Nhiệm vụ của bạn là hãy tự tay biên soạn một tài liệu kỹ thuật / tệp code thay thế tối giản nhưng hợp lệ và đúng định dạng kỹ thuật.\n"
-            f"Hãy tập trung xử lý cho vai trò của {agent_name}.\n"
-            f"Bối cảnh dự án hiện tại:\n{context}\n\n"
-            f"Hãy viết phản hồi hoàn toàn bằng Tiếng Việt hoặc tiếng Anh kỹ thuật thích hợp, sạch sẽ và KHÔNG chứa các thẻ HTML lỗi."
-        )
+        # Read existing file if any to support incremental recovery
+        output_file = _output_file_for(agent_name)
+        existing_content = ""
+        if output_file:
+            project_dir = PROJECTS_DIR / registry.current_project
+            file_path = project_dir / output_file
+            if file_path.exists():
+                try:
+                    existing_content = file_path.read_text(encoding="utf-8")
+                except Exception as re:
+                    print(f"[Pipeline Recovery] Failed to read existing partial file: {re}")
+        
+        if existing_content:
+            fallback_prompt = (
+                f"Là PM Orchestrator điều phối MTA, phân hệ con '{agent_name}' của bạn vừa gặp sự cố kết nối hoặc lỗi phân tích ({e}).\n"
+                f"Phát hiện tệp tin hiện tại đã được tạo dở dang bởi {agent_name} với nội dung như sau:\n"
+                f"--- BẮT ĐẦU FILE HIỆN TẠI ---\n{existing_content}\n--- KẾT THÚC FILE HIỆN TẠI ---\n\n"
+                f"Nhiệm vụ của bạn: Hãy phân tích nhật ký lỗi ({e}), xác định ranh giới lỗi và chỉ thực hiện VIẾT TIẾP hoặc VÁ LỖI GIA TĂNG (Incremental Patch) "
+                f"để hoàn thiện nội dung. Tuyệt đối KHÔNG xóa sạch hoặc ghi đè toàn bộ tệp để viết lại từ đầu.\n"
+                f"Hãy tập trung xử lý cho vai trò của {agent_name}.\n"
+                f"Bối cảnh dự án hiện tại:\n{context}\n\n"
+                f"Hãy trả về nội dung hoàn chỉnh sau khi đã được vá lỗi gia tăng, viết bằng Tiếng Việt hoặc tiếng Anh kỹ thuật thích hợp, sạch sẽ và KHÔNG chứa các thẻ HTML lỗi."
+            )
+        else:
+            fallback_prompt = (
+                f"Là PM Orchestrator điều phối MTA, phân hệ con '{agent_name}' của bạn vừa gặp sự cố kết nối hoặc lỗi phân tích ({e}).\n"
+                f"Nhiệm vụ của bạn là hãy tự tay biên soạn một tài liệu kỹ thuật / tệp code thay thế tối giản nhưng hợp lệ và đúng định dạng kỹ thuật.\n"
+                f"Hãy tập trung xử lý cho vai trò của {agent_name}.\n"
+                f"Bối cảnh dự án hiện tại:\n{context}\n\n"
+                f"Hãy viết phản hồi hoàn toàn bằng Tiếng Việt hoặc tiếng Anh kỹ thuật thích hợp, sạch sẽ và KHÔNG chứa các thẻ HTML lỗi."
+            )
         
         try:
             # Call PM Orchestrator to generate replacement document
             fallback_res = run_agent("pm-orchestrator", fallback_prompt, mock=mock)
             if fallback_res.get("status") == "success" and fallback_res.get("content"):
                 fallback_res["output_file"] = _output_file_for(agent_name)
+                # In Mock Mode, if there is existing content, simulate incremental patching
+                if mock and existing_content:
+                    fallback_res["content"] = (
+                        f"{existing_content}\n\n"
+                        f"# [Incremental Fix - PM Fallback]\n"
+                        f"- Vá lỗi và viết tiếp thành công phần bị gián đoạn cho {agent_name}.\n"
+                        f"- Bổ sung chi tiết tính năng nâng cao và kiểm nghiệm bảo mật.\n"
+                    )
                 # Log recovery status
                 registry.add_agent_message(
                     agent_name, "system",
-                    f"KỊCH BẢN DỰ PHÒNG HOÀN TẤT: PM Agent đã sinh thành công tài liệu thay thế cho {agent_name}.",
+                    f"KỊCH BẢN DỰ PHÒNG HOÀN TẤT: PM Agent đã thực hiện sửa lỗi gia tăng thành công cho {agent_name}.",
                     "status"
                 )
                 # Keep state as DONE for the failed agent so pipeline moves on

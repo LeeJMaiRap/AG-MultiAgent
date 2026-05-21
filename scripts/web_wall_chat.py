@@ -312,6 +312,142 @@ async def cancel_agent(agent_id: str):
     return {"ok": True, "message": "Cancel signal sent."}
 
 # ---------------------------------------------------------------------------
+# Project Context Extraction & Proposal Generator
+# ---------------------------------------------------------------------------
+def get_global_project_context() -> str:
+    """
+    Thu thập bối cảnh dự án toàn cục bao gồm:
+    - Danh sách file và nội dung các file đã tạo trong dự án hiện tại.
+    - Trạng thái và nhiệm vụ hiện tại của các agent phụ.
+    - Nhật ký hội thoại gần đây của các agent phụ (giới hạn một số tin nhắn cuối).
+    """
+    ctx = []
+    project_name = registry.current_project
+    ctx.append(f"PROJECT NAME: {project_name}")
+    ctx.append(f"CURRENT BRIEF: {registry.current_brief}")
+    
+    # 1. Trạng thái các agent
+    ctx.append("\n=== AGENT STATES ===")
+    for aid, agent in registry.agents.items():
+        if aid == "main-agent":
+            continue
+        ctx.append(f"- {agent.display_name} ({aid}): State={agent.state.value}, Task={agent.current_task or 'None'}")
+        
+    # 2. Cấu trúc thư mục dự án và nội dung các file chính
+    ctx.append("\n=== PROJECT FILES ===")
+    project_dir = BASE_DIR / "projects"
+    # Tìm kiếm trong các thư mục status (active, archived, on-hold)
+    actual_dir = None
+    for status in ["active", "archived", "on-hold"]:
+        p = project_dir / status / project_name
+        if p.exists():
+            actual_dir = p
+            break
+    if not actual_dir:
+        actual_dir = project_dir / "active" / project_name
+        
+    if actual_dir.exists():
+        for root, dirs, files in os.walk(str(actual_dir)):
+            for file in files:
+                full_path = os.path.join(root, file)
+                rel_path = os.path.relpath(full_path, str(actual_dir))
+                if ".git" in rel_path or "__pycache__" in rel_path or "chat_history.json" in rel_path or "meta.json" in rel_path:
+                    continue
+                ctx.append(f"\n--- File: {rel_path} ---")
+                try:
+                    with open(full_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    # Để tránh context quá lớn, ta chỉ lấy 100 dòng đầu hoặc toàn bộ nếu file ngắn
+                    lines = content.splitlines()
+                    if len(lines) > 100:
+                        content_summary = "\n".join(lines[:100]) + "\n... (truncated)"
+                    else:
+                        content_summary = content
+                    ctx.append(content_summary)
+                except Exception as e:
+                    ctx.append(f"[Error reading file: {e}]")
+    else:
+        ctx.append("No files generated yet.")
+        
+    # 3. Lịch sử chat của các sub-agents
+    ctx.append("\n=== RECENT SUB-AGENTS CHAT LOGS ===")
+    for aid, agent in registry.agents.items():
+        if aid == "main-agent":
+            continue
+        if agent.messages:
+            ctx.append(f"\n--- Chat Room: {agent.display_name} ({aid}) ---")
+            # Lấy 10 tin nhắn gần nhất
+            recent = agent.messages[-10:]
+            for m in recent:
+                role = m.get("role", "unknown")
+                text = m.get("text", "")
+                if m.get("stream") is True:
+                    continue
+                ctx.append(f"[{role.upper()}] {text[:200]}")
+                
+    return "\n".join(ctx)
+
+
+@app.post("/api/leej_ceo/suggest_proposal")
+async def suggest_proposal(body: dict):
+    agent_id = body.get("agent_id", "").strip()
+    question = body.get("question", "").strip()
+    if not agent_id or not question:
+        return {"error": "Missing agent_id or question"}
+        
+    # Lấy bối cảnh dự án hiện tại
+    context = get_global_project_context()
+    
+    # Sử dụng Codex API để sinh câu trả lời đề xuất
+    api_key = os.environ.get("GEMINI_API_KEY") or "sk-4f6baca69c3b82dc-64fo64-dcad0a8b"
+    url = "https://codex-khanhnguyen.indevs.in/v1/chat/completions"
+    actual_model = "cx/gpt-5.5"
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}",
+    }
+    
+    system_prompt = (
+        "Bạn là LeeJ CEO, bộ não chỉ huy tối cao của dự án. Hãy phân tích bối cảnh dự án hiện tại "
+        "và câu hỏi của một Agent con để đề xuất một câu trả lời ngắn gọn, tối ưu, trực diện, bằng Tiếng Việt.\n"
+        "Đừng thêm bất kỳ phần rườm rà nào khác, chỉ trả về nội dung câu trả lời đề xuất để người dùng có thể duyệt và gửi đi ngay lập tức."
+    )
+    
+    user_prompt = (
+        f"Bối cảnh dự án hiện tại:\n{context}\n\n"
+        f"Agent hỏi ({agent_id}): '{question}'\n\n"
+        f"Hãy đề xuất câu trả lời tốt nhất cho câu hỏi trên:"
+    )
+    
+    try:
+        if GLOBAL_MOCK:
+            time.sleep(1.0)
+            if "dark mode" in question.lower() or "chế độ tối" in question.lower():
+                return {"ok": True, "proposal": "Đồng ý tích hợp chế độ tối (Dark Mode) tối giản, sử dụng các tông màu tối như #0f0f14 và #1a1a24 cho nền, chữ màu #e4e4f0 để tối ưu trải nghiệm đọc ban đêm."}
+            return {"ok": True, "proposal": "Tôi đồng ý với đề xuất của bạn. Hãy tiếp tục thực thi và triển khai các chức năng cốt lõi theo kế hoạch, đảm bảo kiểm thử kỹ lưỡng trước khi bàn giao."}
+            
+        payload = {
+            "model": actual_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "temperature": 0.3
+        }
+        import requests
+        resp = requests.post(url, json=payload, headers=headers, timeout=60)
+        if resp.status_code == 200:
+            res_json = resp.json()
+            proposal = res_json['choices'][0]['message']['content'].strip()
+            return {"ok": True, "proposal": proposal}
+        else:
+            return {"error": f"Codex Error: {resp.status_code}"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# ---------------------------------------------------------------------------
 # Asynchronous Chat Processing & Gemini API Handlers
 # ---------------------------------------------------------------------------
 def generate_streaming_chat(agent_id: str, system_prompt: str, user_text: str, temperature: float = 0.3) -> str:
@@ -596,7 +732,7 @@ def process_chat(agent_id: str, text: str):
         if action and target_agent:
             # Execute steering
             result_msg = steer_agent_pipeline(target_agent, action)
-            # Log message to Main Agent chat room
+            # Log message to LeeJ CEO chat room
             registry.add_agent_message(
                 "main-agent", "agent", 
                 f"⚙️ **[Steering Tool]** Đã nhận diện lệnh điều phối: **{action.upper()}** cho **{target_agent}**.\n\n*Kết quả:* {result_msg}", 
@@ -612,11 +748,17 @@ def process_chat(agent_id: str, text: str):
             
         if "NEW" in text_upper and registry.is_pipeline_active():
             registry.idle_all()
-            registry.add_agent_message("main-agent", "agent", "Đã dừng các agents. Vui lòng tạo dự án mới ở bảng điều khiển bên phải và gửi lại yêu cầu.", "chat")
+            registry.add_agent_message("main-agent", "agent", "Đã dừng các agents. Bạn có thể gửi yêu cầu khởi tạo dự án mới ngay tại đây.", "chat")
             return
 
-        keywords = ["dự án", "xây dựng", "thiết kế", "tạo", "build", "create", "mvp", "app", "project", "lập trình"]
-        if any(kw in text.lower() for kw in keywords):
+        # Improved Intent Parsing: Only start pipeline on explicit creation commands
+        creation_keywords = ["tạo mới", "khởi tạo", "create new", "start project", "bắt đầu dự án", "tạo dự án", "xây dựng ứng dụng", "xây dựng website", "xây dựng app", "build new app", "build new project"]
+        is_creation_intent = any(ckw in text_lower for ckw in creation_keywords) or (
+            ("tạo" in text_lower or "create" in text_lower or "build" in text_lower) and 
+            any(wk in text_lower for wk in ["dự án", "project", "app", "website", "mvp"])
+        )
+
+        if is_creation_intent:
             if registry.is_pipeline_active():
                 registry.add_agent_message(
                     "main-agent", "agent", 
@@ -627,7 +769,7 @@ def process_chat(agent_id: str, text: str):
                 
             registry.add_agent_message(
                 "main-agent", "agent", 
-                f"Tôi đã nhận diện được yêu cầu dự án của bạn: '{text[:100]}...'. Đang chuyển tiếp cho PM Agent để lập kế hoạch...", 
+                f"Tôi là LeeJ CEO. Đã nhận diện yêu cầu khởi tạo dự án: '{text[:100]}...'. Đang chuyển tiếp cho PM Agent để lập kế hoạch...", 
                 "chat"
             )
             
@@ -638,15 +780,28 @@ def process_chat(agent_id: str, text: str):
             thread.start()
             return
             
-        # Casual conversation with Main Agent
+        # Casual conversation with LeeJ CEO - Load Shared Truth Context if active
         registry.set_agent_state("main-agent", AgentState.WORKING)
+        project_ctx = ""
+        if registry.is_pipeline_active():
+            project_ctx = f"\n\nBối cảnh dự án hiện tại (Shared Truth Context):\n{get_global_project_context()}"
+
+        system_prompt = (
+            "Bạn là LeeJ CEO, bộ não chỉ huy tối cao và trợ lý AI điều phối của hệ thống MTA. "
+            "Hãy trò chuyện thân thiện, chuyên nghiệp hoàn toàn bằng Tiếng Việt. Bạn có quyền tiếp cận toàn bộ bối cảnh dự án thời gian thực. "
+            "Khi trả lời, hãy sử dụng bối cảnh này để giải thích hoặc báo cáo chính xác các thắc mắc của người dùng về tiến độ, cấu trúc file, hoặc code của dự án."
+            f"{project_ctx}"
+        )
+
         if GLOBAL_MOCK:
             time.sleep(0.8)
-            reply = "Chào bạn! Tôi là Agent Chính (AG2.0). Rất vui được hỗ trợ bạn. Các Agent con đang ở trạng thái NGHỈ (Idle) để tiết kiệm token. Bạn có thể trò chuyện với tôi hoặc gửi một yêu cầu dự án (chứa các từ khóa như 'dự án', 'xây dựng', 'MVP', v.v.) để kích hoạt toàn bộ Web-Team hoạt động nhé!"
+            if project_ctx:
+                reply = f"Chào bạn! Tôi là LeeJ CEO. Dự án '{registry.current_project}' đang hoạt động. Tôi đã nạp Shared Truth Context để sẵn sàng trả lời các câu hỏi về file, cấu trúc hoặc mã nguồn của bạn. Bạn muốn hỏi về phần nào?"
+            else:
+                reply = "Chào bạn! Tôi là LeeJ CEO. Rất vui được hỗ trợ bạn. Các Agent con đang ở trạng thái NGHỈ (Idle) để tiết kiệm token. Bạn có thể trò chuyện với tôi hoặc ra lệnh khởi tạo dự án mới (ví dụ: 'tạo dự án website bán hàng') để kích hoạt Web-Team nhé!"
             registry.add_agent_message("main-agent", "agent", reply, "chat")
         else:
             try:
-                system_prompt = "Bạn là Agent Chính (AG2.0), trợ lý AI điều phối chính của hệ thống MTA. Hãy trò chuyện thân thiện, chuyên nghiệp hoàn toàn bằng tiếng Việt. Nếu người dùng đưa ra yêu cầu dự án, hãy khuyên họ nhập chi tiết để bạn chuyển tiếp cho PM Agent."
                 generate_streaming_chat("main-agent", system_prompt, text, temperature=0.4)
             except Exception as e:
                 reply = f"Lỗi kết nối Codex Gateway (Live Mode): {e}. Hãy kiểm tra GEMINI_API_KEY hoặc thử lại với Mock Mode."
@@ -779,7 +934,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Antigravity 2.0 - Agent Wall Chat</title>
+<title>LeeJ CEO - Enterprise Orchestrator</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
@@ -799,6 +954,17 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     --blue: #3b82f6;
     --radius: 12px;
 }
+body.light-mode {
+    --bg: #f5f5f7;
+    --surface: #ffffff;
+    --surface2: #e5e5e7;
+    --border: #dcdcd1;
+    --border: #e5e5e7;
+    --text: #1d1d1f;
+    --text-dim: #86868b;
+    --accent: #0071e3;
+    --accent-glow: rgba(0, 113, 227, 0.15);
+}
 body {
     font-family: 'Inter', system-ui, sans-serif;
     background: var(--bg);
@@ -807,6 +973,7 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    transition: background 0.3s, color 0.3s;
 }
 
 /* --- Header --- */
@@ -815,14 +982,15 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 12px 24px;
-    background: linear-gradient(135deg, #16162a 0%, #1e1e3a 100%);
+    background: var(--surface);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
+    transition: background 0.3s, border-color 0.3s;
 }
 .header h1 {
     font-size: 18px;
     font-weight: 700;
-    background: linear-gradient(135deg, var(--accent), #a78bfa);
+    background: linear-gradient(135deg, var(--accent), #8b5cf6);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
@@ -841,29 +1009,6 @@ body {
 .header-right { display: flex; align-items: center; gap: 12px; }
 .header-right span { font-size: 12px; color: var(--text-dim); }
 
-/* --- Pipeline Controls --- */
-.pipeline-bar {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 24px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-}
-.pipeline-bar input {
-    flex: 1;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 8px 14px;
-    color: var(--text);
-    font-size: 13px;
-    outline: none;
-    transition: border-color 0.2s;
-}
-.pipeline-bar input:focus { border-color: var(--accent); }
-.pipeline-bar input::placeholder { color: var(--text-dim); }
 .btn {
     padding: 8px 18px;
     border: none;
@@ -895,6 +1040,7 @@ body {
     flex-direction: column;
     overflow-y: auto;
     flex-shrink: 0;
+    transition: background 0.3s, border-color 0.3s;
 }
 .sidebar-title {
     font-size: 11px;
@@ -945,6 +1091,7 @@ body {
     flex-direction: column;
     background: var(--bg);
     overflow: hidden;
+    transition: background 0.3s;
 }
 .chat-header {
     padding: 14px 20px;
@@ -953,6 +1100,7 @@ body {
     align-items: center;
     gap: 12px;
     background: var(--surface);
+    transition: background 0.3s, border-color 0.3s;
 }
 .chat-header .agent-avatar {
     width: 36px; height: 36px;
@@ -998,6 +1146,7 @@ body {
     background: var(--surface2);
     color: var(--text);
     border-bottom-left-radius: 4px;
+    transition: background 0.3s, color 0.3s;
 }
 .msg.system {
     align-self: center;
@@ -1067,6 +1216,7 @@ body {
     border-top: 1px solid var(--border);
     background: var(--surface);
     flex-shrink: 0;
+    transition: background 0.3s, border-color 0.3s;
 }
 .chat-input-bar textarea {
     flex: 1;
@@ -1078,6 +1228,7 @@ body {
     font-size: 13px;
     outline: none;
     resize: none;
+    transition: background 0.3s, border-color 0.3s, color 0.3s;
 }
 .chat-input-bar textarea:focus { border-color: var(--accent); }
 .chat-input-bar button {
@@ -1118,10 +1269,10 @@ body {
     border-left: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
+    overflow: hidden;
     flex-shrink: 0;
     padding: 16px;
-    gap: 16px;
+    transition: background 0.3s, border-color 0.3s;
 }
 .panel-section {
     background: var(--surface2);
@@ -1131,42 +1282,18 @@ body {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    transition: background 0.3s, border-color 0.3s;
 }
 .panel-section h3 {
     font-size: 13px;
     font-weight: 700;
-    color: #fff;
+    color: var(--text);
     border-bottom: 1px solid var(--border);
     padding-bottom: 8px;
     margin-bottom: 2px;
     display: flex;
     align-items: center;
     gap: 6px;
-}
-.form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-}
-.form-group label {
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-.form-group input, .form-group select, .form-group textarea {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 8px 10px;
-    color: var(--text);
-    font-size: 12px;
-    outline: none;
-    transition: border-color 0.2s;
-}
-.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
-    border-color: var(--accent);
 }
 .project-list-title {
     font-size: 10px;
@@ -1204,7 +1331,7 @@ body {
 .project-card .proj-name {
     font-size: 12px;
     font-weight: 600;
-    color: #fff;
+    color: var(--text);
 }
 .project-card .proj-desc {
     font-size: 11px;
@@ -1251,7 +1378,7 @@ body {
     gap: 8px;
     font-weight: 700;
     font-size: 12px;
-    color: #fff;
+    color: var(--text);
     margin-bottom: 6px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -1319,7 +1446,7 @@ body {
     display: flex; justify-content: space-between; align-items: center;
     margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 10px;
 }
-.modal-header h3 { font-size: 14px; color: #fff; }
+.modal-header h3 { font-size: 14px; color: var(--text); }
 .modal-body { flex: 1; display: flex; flex-direction: column; }
 .modal-body textarea {
     flex: 1; background: var(--surface); color: var(--text);
@@ -1341,40 +1468,38 @@ body {
 </head>
 <body>
 <div class="header">
-    <h1>&#9670; Antigravity 2.0 &mdash; Agent Wall Chat</h1>
+    <h1>💎 LeeJ CEO &mdash; Enterprise Orchestrator</h1>
     <div class="header-right">
         <span class="status-dot"></span>
         <span id="ws-status">Connecting...</span>
     </div>
 </div>
 
-<div class="pipeline-bar">
-    <input type="text" id="brief-input" placeholder="Enter project brief to start pipeline..." />
-    <input type="text" id="project-input" placeholder="Project name" value="web-project" style="max-width:150px" />
-    <select id="mode-select" class="btn" style="background: var(--surface2); color: var(--text); border: 1px solid var(--border); outline: none; padding: 8px 12px; border-radius: 8px; font-weight: 500; cursor: pointer;">
-        <option value="mock" selected>🤖 Mock Mode (Simulation)</option>
-        <option value="live">&#9889; Live Mode (Codex Gateway)</option>
-    </select>
-    <button class="btn btn-primary" onclick="startPipeline()">&#9654; Run Pipeline</button>
-</div>
-
 <div class="main">
     <div class="sidebar">
-        <div class="sidebar-title">Agent Rooms</div>
+        <div class="sidebar-title">Phòng Làm Việc Agent</div>
         <div id="agent-tabs"></div>
+        
+        <!-- Theme Toggle 9router -->
+        <div class="theme-toggle-container" style="padding: 12px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; margin-top: auto; flex-shrink: 0;">
+            <span style="font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; color: var(--text-dim);">Chế độ</span>
+            <button onclick="toggleTheme()" id="theme-toggle-btn" class="btn" style="padding: 6px 12px; background: var(--surface2); color: var(--text); border: 1px solid var(--border); font-size: 11px; font-weight: 600; border-radius: 6px; display: flex; align-items: center; gap: 4px;">
+                🌙 Tối
+            </button>
+        </div>
     </div>
     
     <div class="chat-panel">
         <div class="chat-header" id="chat-header">
-            <div class="agent-avatar" id="chat-avatar">AC</div>
+            <div class="agent-avatar" id="chat-avatar">LC</div>
             <div class="info">
-                <h3 id="chat-agent-name">Agent Chính (AG2.0)</h3>
+                <h3 id="chat-agent-name">LeeJ CEO</h3>
                 <p id="chat-agent-role">Primary AI Assistant &amp; Coordinator | cx/gpt-5.5</p>
             </div>
             <span id="chat-permission" class="permission-badge safe">&#128275; Full Access</span>
         </div>
         
-        <!-- Q&A Bridge Panel -->
+        <!-- Q&A Bridge Panel (Fallback) -->
         <div id="qa-bridge-banner" class="qa-bridge-banner" style="display: none;">
             <div class="qa-header">❓ Q&A Bridge - PM Agent cần làm rõ</div>
             <div id="qa-question-text" class="qa-question">PM Agent is asking a question...</div>
@@ -1387,43 +1512,15 @@ body {
         <div class="messages" id="messages"></div>
         
         <div class="chat-input-bar">
-            <textarea id="chat-input" placeholder="Type a message to this agent..." rows="2" onkeydown="handleChatKey(event)"></textarea>
+            <textarea id="chat-input" placeholder="Nhập tin nhắn để chỉ đạo..." rows="2" onkeydown="handleChatKey(event)"></textarea>
             <button id="btn-send" onclick="sendChat()">Send</button>
         </div>
     </div>
 
-    <!-- Project Panel (Right Sidebar) -->
+    <!-- Project Panel (Right Sidebar - Explorer Only) -->
     <div class="project-panel">
-        <div class="panel-section">
-            <h3>&#128193; Dự án hiện tại</h3>
-            <div class="form-group" style="gap: 4px;">
-                <span id="current-project-badge" style="font-weight: 700; color: var(--accent); font-size: 14px;">web-project</span>
-            </div>
-        </div>
-        
-        <div class="panel-section">
-            <h3>&#10133; Tạo dự án mới</h3>
-            <div class="form-group">
-                <label for="new-project-name">Tên dự án</label>
-                <input type="text" id="new-project-name" placeholder="Ví dụ: my-cool-app" />
-            </div>
-            <div class="form-group">
-                <label for="new-project-desc">Mô tả ngắn</label>
-                <textarea id="new-project-desc" placeholder="Tóm tắt yêu cầu dự án..." rows="2"></textarea>
-            </div>
-            <div class="form-group">
-                <label for="new-project-status">Trạng thái</label>
-                <select id="new-project-status">
-                    <option value="Active">Active</option>
-                    <option value="On-Hold">On-Hold</option>
-                    <option value="Archived">Archived</option>
-                </select>
-            </div>
-            <button class="btn btn-primary" onclick="createNewProject()" style="width: 100%; padding: 8px;">Tạo dự án</button>
-        </div>
-        
-        <div class="panel-section" style="flex: 1; min-height: 220px; display: flex; flex-direction: column; overflow: hidden;">
-            <h3>&#128203; Danh sách dự án</h3>
+        <div class="panel-section" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; height: 100%;">
+            <h3>📂 Danh sách dự án</h3>
             <div id="project-list" style="overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
                 <!-- Projects rendered dynamically -->
             </div>
@@ -1457,6 +1554,10 @@ let activeAgent = null;
 let agentMessages = {};
 let currentProject = 'web-project';
 
+// Q&A Bridge globals
+let qaAgentIdPending = null;
+let qaQuestionPending = '';
+
 function connect() {
     ws = new WebSocket(WS_URL);
     ws.onopen = () => {
@@ -1476,11 +1577,13 @@ function handleEvent(msg) {
     if (msg.event === 'init') {
         agents = msg.agents;
         currentProject = msg.current_project || 'web-project';
-        document.getElementById('current-project-badge').textContent = currentProject;
-        document.getElementById('project-input').value = currentProject;
         
         agents.forEach(a => {
             if (!agentMessages[a.agent_id]) agentMessages[a.agent_id] = [];
+            // Rebrand in-memory
+            if (a.agent_id === 'main-agent') {
+                a.display_name = 'LeeJ CEO';
+            }
         });
         renderTabs();
         if (!activeAgent && agents.length > 0) selectAgent(agents[0].agent_id);
@@ -1510,6 +1613,8 @@ function handleEvent(msg) {
         const id = msg.agent_id;
         if (!agentMessages[id]) agentMessages[id] = [];
         const lastMsg = agentMessages[id][agentMessages[id].length - 1];
+        
+        let isNewBubble = false;
         if (lastMsg && lastMsg.role === msg.role && lastMsg.stream === true) {
             // Update existing stream bubble in-place (typing effect)
             lastMsg.text = msg.text;
@@ -1517,8 +1622,40 @@ function handleEvent(msg) {
         } else {
             // Start a new stream bubble
             agentMessages[id].push({ ts: msg.ts, role: msg.role, text: msg.text, type: msg.type, stream: true });
+            isNewBubble = true;
         }
-        if (activeAgent === id) renderMessages();
+        
+        if (activeAgent === id) {
+            if (isNewBubble) {
+                renderMessages();
+            } else {
+                // Update the last message bubble in-place directly to optimize streaming & prevent flickering
+                const originalIndex = agentMessages[id].length - 1;
+                const msgId = `msg-${id}-${originalIndex}`;
+                const node = document.getElementById(msgId);
+                if (node) {
+                    const contentDiv = node.querySelector('.msg-content');
+                    // Strip the QA bridge token before parsing markdown
+                    let cleanText = msg.text || '';
+                    const qaRegex = /\[QA_BRIDGE_QUESTION:([a-zA-Z0-9_-]+)\]/;
+                    cleanText = cleanText.replace(qaRegex, '').trim();
+                    
+                    const htmlContent = (typeof marked !== 'undefined') ? marked.parse(cleanText) : escapeHtml(cleanText);
+                    if (contentDiv && contentDiv.innerHTML !== htmlContent) {
+                        contentDiv.innerHTML = htmlContent;
+                    }
+                    
+                    // Auto-scroll if close to bottom
+                    const container = document.getElementById('messages');
+                    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 120;
+                    if (isNearBottom) {
+                        container.scrollTop = container.scrollHeight;
+                    }
+                } else {
+                    renderMessages();
+                }
+            }
+        }
         // Subtle flash on tab if not active
         const streamTab = document.querySelector(`[data-agent="${id}"]`);
         if (streamTab && activeAgent !== id) {
@@ -1552,10 +1689,12 @@ function updateSendButton() {
     if (a && (a.state === 'WORKING' || a.state === 'PLANNING')) {
         btn.textContent = 'Tạm dừng';
         btn.style.background = 'var(--yellow)';
+        btn.style.color = '#1d1d1f';
         btn.onclick = cancelAgent;
     } else {
         btn.textContent = 'Send';
         btn.style.background = '';
+        btn.style.color = '';
         btn.onclick = sendChat;
     }
 }
@@ -1567,15 +1706,18 @@ function cancelAgent() {
 
 function renderTabs() {
     const container = document.getElementById('agent-tabs');
-    container.innerHTML = agents.map(a => `
-        <div class="agent-tab ${activeAgent === a.agent_id ? 'active' : ''}"
-             data-agent="${a.agent_id}"
-             onclick="selectAgent('${a.agent_id}')">
-            <span class="dot dot-${a.state}"></span>
-            <span class="name">${a.display_name}</span>
-            <span class="state-label">${a.state}</span>
-        </div>
-    `).join('');
+    container.innerHTML = agents.map(a => {
+        const dName = a.agent_id === 'main-agent' ? 'LeeJ CEO' : a.display_name;
+        return `
+            <div class="agent-tab ${activeAgent === a.agent_id ? 'active' : ''}"
+                 data-agent="${a.agent_id}"
+                 onclick="selectAgent('${a.agent_id}')">
+                <span class="dot dot-${a.state}"></span>
+                <span class="name">${dName}</span>
+                <span class="state-label">${a.state}</span>
+            </div>
+        `;
+    }).join('');
     updateSendButton();
 }
 
@@ -1584,9 +1726,13 @@ function selectAgent(id) {
     renderTabs();
     const a = agents.find(x => x.agent_id === id);
     if (!a) return;
-    document.getElementById('chat-avatar').textContent = a.display_name.split(' ').map(w=>w[0]).join('');
-    document.getElementById('chat-agent-name').textContent = a.display_name;
-    document.getElementById('chat-agent-role').textContent = a.role + ' | ' + a.model;
+    
+    const dName = id === 'main-agent' ? 'LeeJ CEO' : a.display_name;
+    const dRole = id === 'main-agent' ? 'Primary AI Assistant & Coordinator' : a.role;
+    
+    document.getElementById('chat-avatar').textContent = dName.split(' ').map(w=>w[0]).join('');
+    document.getElementById('chat-agent-name').textContent = dName;
+    document.getElementById('chat-agent-role').textContent = dRole + ' | ' + a.model;
     const perm = document.getElementById('chat-permission');
     if (a.privileged) {
         perm.className = 'permission-badge safe';
@@ -1619,6 +1765,29 @@ function renderMessages() {
     const container = document.getElementById('messages');
     const msgs = agentMessages[activeAgent] || [];
     
+    // Scrutinize Q&A Bridge pending token on the active agent (specifically main-agent/LeeJ CEO)
+    let pendingQaAgentId = null;
+    let pendingQaQuestion = '';
+    
+    if (activeAgent === 'main-agent') {
+        for (let i = msgs.length - 1; i >= 0; i--) {
+            const m = msgs[i];
+            if (m.role === 'user') {
+                // If user sent a reply after the QA bridge question, it's considered answered
+                break;
+            }
+            const qaRegex = /\[QA_BRIDGE_QUESTION:([a-zA-Z0-9_-]+)\]/;
+            const match = m.text && m.text.match(qaRegex);
+            if (match) {
+                pendingQaAgentId = match[1];
+                pendingQaQuestion = m.text.replace(qaRegex, '').replace(/❓\s*\*\*\[Q&A\s*Bridge\].*?đang\s*hỏi:\*\*/i, '').trim();
+                break;
+            }
+        }
+    }
+    qaAgentIdPending = pendingQaAgentId;
+    qaQuestionPending = pendingQaQuestion;
+
     requestAnimationFrame(() => {
         const existingIds = new Set();
         Array.from(container.children).forEach(child => existingIds.add(child.id));
@@ -1629,7 +1798,6 @@ function renderMessages() {
         const displayMsgs = msgs.slice(-50);
         
         displayMsgs.forEach((m) => {
-            // Use index from the original msgs array to maintain stable DOM IDs
             const originalIndex = msgs.indexOf(m);
             const msgId = `msg-${activeAgent}-${originalIndex}`;
             const cls = m.type === 'error' ? 'error' : m.role;
@@ -1655,7 +1823,17 @@ function renderMessages() {
             const contentDiv = node.querySelector('.msg-content');
             const metaDiv = node.querySelector('.meta');
             
-            const htmlContent = (typeof marked !== 'undefined') ? marked.parse(m.text || '') : escapeHtml(m.text || '');
+            // Clean dynamic token before processing markdown
+            let displayTemplate = m.text || '';
+            let qaAgentId = null;
+            const qaRegex = /\[QA_BRIDGE_QUESTION:([a-zA-Z0-9_-]+)\]/;
+            const match = displayTemplate.match(qaRegex);
+            if (match) {
+                qaAgentId = match[1];
+                displayTemplate = displayTemplate.replace(qaRegex, '').trim();
+            }
+            
+            const htmlContent = (typeof marked !== 'undefined') ? marked.parse(displayTemplate) : escapeHtml(displayTemplate);
             if (contentDiv.innerHTML !== htmlContent) {
                 contentDiv.innerHTML = htmlContent;
             }
@@ -1663,6 +1841,28 @@ function renderMessages() {
             const metaText = `${m.role} &middot; ${time}`;
             if (metaDiv.innerHTML !== metaText) {
                 metaDiv.innerHTML = metaText;
+            }
+            
+            // Inject Quick Reply buttons if this is an active pending Q&A Bridge question bubble
+            let quickRepliesDiv = node.querySelector('.qa-quick-replies');
+            if (qaAgentId && qaAgentId === qaAgentIdPending) {
+                if (!quickRepliesDiv) {
+                    quickRepliesDiv = document.createElement('div');
+                    quickRepliesDiv.className = 'qa-quick-replies';
+                    quickRepliesDiv.style.marginTop = '10px';
+                    quickRepliesDiv.style.display = 'flex';
+                    quickRepliesDiv.style.gap = '8px';
+                    node.appendChild(quickRepliesDiv);
+                }
+                const escapedQuestion = qaQuestionPending.replace(/`/g, '\\`').replace(/\$/g, '\\$').replace(/"/g, '&quot;');
+                quickRepliesDiv.innerHTML = `
+                    <button class="btn" onclick="qaUserFill()" style="background: rgba(108, 99, 255, 0.12); color: var(--accent); border: 1px solid rgba(108, 99, 255, 0.25); padding: 4px 10px; font-size: 11px; border-radius: 6px; font-weight: 600;">[User tự điền]</button>
+                    <button class="btn" id="btn-suggest-${qaAgentId}" onclick="qaCeoSuggest('${qaAgentId}', \`${escapedQuestion}\`)" style="background: rgba(34, 197, 94, 0.12); color: var(--green); border: 1px solid rgba(34, 197, 94, 0.25); padding: 4px 10px; font-size: 11px; border-radius: 6px; font-weight: 600;">[LeeJ CEO đề xuất]</button>
+                `;
+            } else {
+                if (quickRepliesDiv) {
+                    quickRepliesDiv.remove();
+                }
             }
             
             existingIds.delete(msgId);
@@ -1682,13 +1882,73 @@ function renderMessages() {
     });
 }
 
+function qaUserFill() {
+    const input = document.getElementById('chat-input');
+    if (input) {
+        input.placeholder = "Nhập câu trả lời làm rõ yêu cầu của bạn...";
+        input.focus();
+    }
+}
+
+async function qaCeoSuggest(agentId, question) {
+    const btn = document.getElementById(`btn-suggest-${agentId}`);
+    if (!btn) return;
+    const originalText = btn.textContent;
+    btn.textContent = "⏳ Đang phân tích...";
+    btn.disabled = true;
+    
+    try {
+        const resp = await fetch('/api/leej_ceo/suggest_proposal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agent_id: agentId, question: question })
+        });
+        const data = await resp.json();
+        if (data.error) {
+            alert('Lỗi lấy đề xuất: ' + data.error);
+        } else if (data.proposal) {
+            const input = document.getElementById('chat-input');
+            if (input) {
+                input.value = data.proposal;
+                input.focus();
+            }
+        }
+    } catch (e) {
+        console.error('Failed to fetch suggestion:', e);
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
+}
+
 function sendChat() {
     const input = document.getElementById('chat-input');
     const text = input.value.trim();
     if (!text || !activeAgent) return;
     input.value = '';
-    // Send via WebSocket
-    ws.send(JSON.stringify({ agent_id: activeAgent, text: text }));
+    
+    // Auto-forward logic: if we are talking to LeeJ CEO (main-agent) and there is a pending QA question
+    if (activeAgent === 'main-agent' && qaAgentIdPending) {
+        // Send a message to WebSocket to display the user reply bubble in-place immediately
+        ws.send(JSON.stringify({ agent_id: activeAgent, text: text }));
+        
+        // Post reply to the PM bridge API endpoint
+        fetch('/api/pm/answer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ answer: text })
+        }).then(r => r.json()).then(res => {
+            if (res.error) {
+                console.error('Auto-forward error:', res.error);
+            } else {
+                qaAgentIdPending = null;
+                qaQuestionPending = '';
+            }
+        });
+    } else {
+        // Normal text message submission
+        ws.send(JSON.stringify({ agent_id: activeAgent, text: text }));
+    }
 }
 
 function handleChatKey(event) {
@@ -1696,28 +1956,6 @@ function handleChatKey(event) {
         event.preventDefault();
         sendChat();
     }
-    // Shift+Enter allows newline in textarea
-}
-
-function startPipeline() {
-    const brief = document.getElementById('brief-input').value.trim();
-    const project = document.getElementById('project-input').value.trim() || 'web-project';
-    const mode = document.getElementById('mode-select').value;
-    if (!brief) { alert('Please enter a project brief.'); return; }
-    
-    const isMock = mode === 'mock';
-    fetch('/api/pipeline/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brief, project_name: project, mock: isMock })
-    }).then(r => r.json()).then(res => {
-        if (res.ok) {
-            // Switch to PM tab to watch progress
-            selectAgent('pm-orchestrator');
-        } else {
-            alert(res.error || 'Failed to start pipeline');
-        }
-    });
 }
 
 async function loadProjects() {
@@ -1853,46 +2091,6 @@ async function deleteFile() {
     }
 }
 
-async function createNewProject() {
-    const nameInput = document.getElementById('new-project-name');
-    const descInput = document.getElementById('new-project-desc');
-    const statusSelect = document.getElementById('new-project-status');
-    
-    const name = nameInput.value.trim();
-    const desc = descInput.value.trim();
-    const status = statusSelect.value;
-    
-    if (!name) {
-        alert('Vui lòng nhập tên dự án.');
-        return;
-    }
-    
-    try {
-        const resp = await fetch('/api/project/create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ project_name: name, description: desc, status: status })
-        });
-        const data = await resp.json();
-        if (data.error) {
-            alert('Lỗi: ' + data.error);
-            return;
-        }
-        nameInput.value = '';
-        descInput.value = '';
-        
-        currentProject = data.project.project_name;
-        document.getElementById('current-project-badge').textContent = currentProject;
-        document.getElementById('project-input').value = currentProject;
-        
-        agentMessages = {};
-        selectAgent(activeAgent || 'main-agent');
-        await loadProjects();
-    } catch (e) {
-        console.error('Failed to create project:', e);
-    }
-}
-
 async function loadProject(name) {
     try {
         const resp = await fetch(`/api/project/load?name=${name}`);
@@ -1902,9 +2100,6 @@ async function loadProject(name) {
             return;
         }
         currentProject = name;
-        document.getElementById('current-project-badge').textContent = currentProject;
-        document.getElementById('project-input').value = currentProject;
-        
         agentMessages = {};
         selectAgent(activeAgent || 'main-agent');
         await loadProjects();
@@ -1962,17 +2157,37 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
-connect();
+// 9router Theme Toggling implementation
+function toggleTheme() {
+    const body = document.body;
+    body.classList.toggle('light-mode');
+    const isLight = body.classList.contains('light-mode');
+    localStorage.setItem('theme', isLight ? 'light' : 'dark');
+    updateThemeUI(isLight);
+}
 
-// Sync dropdown mode switch with backend in real-time
-document.getElementById('mode-select').addEventListener('change', (e) => {
-    const isMock = e.target.value === 'mock';
-    fetch('/api/mode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mock: isMock })
-    });
-});
+function updateThemeUI(isLight) {
+    const btn = document.getElementById('theme-toggle-btn');
+    if (btn) {
+        btn.innerHTML = isLight ? '☀️ Sáng' : '🌙 Tối';
+    }
+}
+
+function initTheme() {
+    const savedTheme = localStorage.getItem('theme');
+    const body = document.body;
+    if (savedTheme === 'light') {
+        body.classList.add('light-mode');
+        updateThemeUI(true);
+    } else {
+        body.classList.remove('light-mode');
+        updateThemeUI(false);
+    }
+}
+
+// Initialize theme and socket connection
+initTheme();
+connect();
 </script>
 </body>
 </html>"""
