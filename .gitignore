@@ -1,0 +1,6 @@
+assistant_chats.json
+**/__pycache__/
+*.pyc
+projects/active/*/chat_history.json
+projects/active/*/scope_history.json
+*.log

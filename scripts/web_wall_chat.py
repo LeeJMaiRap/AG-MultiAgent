@@ -40,11 +40,30 @@ from orchestrate import OrchestratorRegistry, AgentState, run_pipeline, check_pe
 # ---------------------------------------------------------------------------
 app = FastAPI(title="Antigravity 2.0 Agent Wall Chat")
 registry = OrchestratorRegistry()
+registry.active_assistant_session_id = ""  # Dynamic assistant session tracker
 PORT = int(os.environ.get("WALL_CHAT_PORT", 20130))
 GLOBAL_MOCK = True
 BASE_DIR = Path(__file__).parent.parent.resolve()
 SUBAGENTS_DIR = BASE_DIR / "subagents"
 import time
+
+ASSISTANT_CHATS_FILE = os.path.abspath(os.path.join(str(BASE_DIR), "assistant_chats.json"))
+
+def load_assistant_chats():
+    if not os.path.exists(ASSISTANT_CHATS_FILE):
+        return {"sessions": []}
+    try:
+        with open(ASSISTANT_CHATS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {"sessions": []}
+
+def save_assistant_chats(data):
+    try:
+        with open(ASSISTANT_CHATS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Error saving assistant chats: {e}")
 
 def parse_project_brief_and_name(text: str) -> (str, str):
     """
@@ -191,6 +210,105 @@ async def set_leej_ceo_mode(body: dict):
     _on_orchestrator_event("leej_ceo_mode_change", {"mode": mode})
     return {"ok": True, "mode": mode}
 
+@app.get("/api/assistant/sessions")
+async def get_assistant_sessions():
+    chats = load_assistant_chats()
+    sessions = []
+    for s in chats.get("sessions", []):
+        sessions.append({
+            "id": s.get("id"),
+            "title": s.get("title", "Trò chuyện mới"),
+            "created_at": s.get("created_at")
+        })
+    return sessions
+
+@app.post("/api/assistant/sessions")
+async def create_assistant_session(body: dict = None):
+    import uuid
+    chats = load_assistant_chats()
+    title = "Trò chuyện mới"
+    if body:
+        title = body.get("title", title).strip()
+    
+    new_id = str(uuid.uuid4())
+    new_session = {
+        "id": new_id,
+        "title": title,
+        "created_at": datetime.now().isoformat(),
+        "messages": []
+    }
+    chats.setdefault("sessions", []).append(new_session)
+    save_assistant_chats(chats)
+    registry.active_assistant_session_id = new_id
+    return new_session
+
+@app.post("/api/assistant/sessions/select")
+async def select_assistant_session(body: dict):
+    session_id = body.get("session_id", "").strip()
+    if not session_id:
+        return {"error": "session_id is required"}
+    chats = load_assistant_chats()
+    session = next((s for s in chats.get("sessions", []) if s["id"] == session_id), None)
+    if not session:
+        return {"error": "session not found"}
+    registry.active_assistant_session_id = session_id
+    return {"ok": True, "session_id": session_id}
+
+@app.delete("/api/assistant/sessions/{session_id}")
+async def delete_assistant_session(session_id: str):
+    chats = load_assistant_chats()
+    sessions = chats.get("sessions", [])
+    new_sessions = [s for s in sessions if s["id"] != session_id]
+    if len(sessions) == len(new_sessions):
+        return {"error": "session not found"}
+    chats["sessions"] = new_sessions
+    save_assistant_chats(chats)
+    if registry.active_assistant_session_id == session_id:
+        registry.active_assistant_session_id = ""
+    return {"ok": True}
+
+@app.get("/api/assistant/sessions/{session_id}/messages")
+async def get_assistant_session_messages(session_id: str):
+    chats = load_assistant_chats()
+    session = next((s for s in chats.get("sessions", []) if s["id"] == session_id), None)
+    if not session:
+        return {"error": "session not found"}
+    return session.get("messages", [])
+
+@app.get("/api/leej_ceo/active_project")
+async def get_active_project():
+    return {
+        "project_name": registry.current_project,
+        "leej_ceo_mode": registry.leej_ceo_mode
+    }
+
+@app.post("/api/leej_ceo/active_project")
+async def set_active_project(body: dict):
+    project_name = body.get("project_name", "").strip()
+    if not project_name:
+        return {"error": "project_name is required"}
+    
+    ok = registry.load_chat_history(project_name)
+    registry.current_project = project_name
+    registry.leej_ceo_mode = "ceo"
+    
+    # Broadcast events to frontend
+    _on_orchestrator_event("active_project_change", {"project_name": project_name})
+    _on_orchestrator_event("leej_ceo_mode_change", {"mode": "ceo"})
+    
+    return {"ok": True, "project_name": project_name, "agents": registry.get_all_states()}
+
+@app.post("/api/leej_ceo/active_project/unload")
+async def unload_active_project():
+    registry.current_project = ""
+    registry.leej_ceo_mode = "assistant"
+    registry.clear_all_messages()
+    
+    _on_orchestrator_event("active_project_change", {"project_name": ""})
+    _on_orchestrator_event("leej_ceo_mode_change", {"mode": "assistant"})
+    
+    return {"ok": True, "project_name": "", "agents": registry.get_all_states()}
+
 @app.post("/api/agents/{agent_id}/chat")
 async def chat_to_agent(agent_id: str, body: dict):
     text = body.get("text", "").strip()
@@ -199,7 +317,8 @@ async def chat_to_agent(agent_id: str, body: dict):
     if agent_id not in registry.agents:
         return {"error": "unknown agent"}
     
-    process_chat_in_thread(agent_id, text)
+    assistant_session_id = body.get("assistant_session_id")
+    process_chat_in_thread(agent_id, text, assistant_session_id)
     return {"ok": True, "message": "Message processing started."}
 
 @app.post("/api/pipeline/start")
@@ -538,7 +657,7 @@ async def suggest_proposal(body: dict):
 # ---------------------------------------------------------------------------
 # Asynchronous Chat Processing & Gemini API Handlers
 # ---------------------------------------------------------------------------
-def generate_streaming_chat(agent_id: str, system_prompt: str, user_text: str, temperature: float = 0.3) -> str:
+def generate_streaming_chat(agent_id: str, system_prompt: str, user_text: str, temperature: float = 0.3, assistant_session_id: str = None) -> str:
     import requests
     import json
     import time
@@ -561,15 +680,28 @@ def generate_streaming_chat(agent_id: str, system_prompt: str, user_text: str, t
         {"role": "system", "content": system_prompt}
     ]
     
-    # Load all historical messages for this agent to prevent context loss
-    if agent_id in registry.agents:
-        for m in registry.agents[agent_id].messages:
-            if m["role"] == "user":
-                messages.append({"role": "user", "content": m["text"]})
-            elif m["role"] == "agent":
-                if m.get("stream") is True:
-                    continue
-                messages.append({"role": "assistant", "content": m["text"]})
+    # Load historical messages
+    if assistant_session_id:
+        chats = load_assistant_chats()
+        session = next((s for s in chats.get("sessions", []) if s["id"] == assistant_session_id), None)
+        if session:
+            for m in session.get("messages", []):
+                if m["role"] == "user":
+                    messages.append({"role": "user", "content": m["text"]})
+                elif m["role"] == "agent":
+                    if m.get("stream") is True:
+                        continue
+                    messages.append({"role": "assistant", "content": m["text"]})
+    else:
+        # Load all historical messages for this agent to prevent context loss
+        if agent_id in registry.agents:
+            for m in registry.agents[agent_id].messages:
+                if m["role"] == "user":
+                    messages.append({"role": "user", "content": m["text"]})
+                elif m["role"] == "agent":
+                    if m.get("stream") is True:
+                        continue
+                    messages.append({"role": "assistant", "content": m["text"]})
                 
     # Ensure the current user message is appended if not already present
     if not messages or messages[-1]["role"] != "user" or messages[-1]["content"] != user_text:
@@ -634,15 +766,15 @@ def generate_streaming_chat(agent_id: str, system_prompt: str, user_text: str, t
                                     current_chunk_text += chunk_content
                                     full_text += chunk_content
                                     # Stream character/words to Web UI in real-time
-                                    registry.stream_agent_message(agent_id, "agent", full_text, "chat")
+                                    registry.stream_agent_message(agent_id, "agent", full_text, "chat", assistant_session_id=assistant_session_id)
                             except Exception:
                                 pass
                                 
                         if agent_id in registry.agents and registry.agents[agent_id].is_cancelled:
-                            registry.add_agent_message(agent_id, "system", "Đã ngắt quá trình sinh dữ liệu theo yêu cầu (Tạm dừng).", "status")
+                            registry.add_agent_message(agent_id, "system", "Đã ngắt quá trình sinh dữ liệu theo yêu cầu (Tạm dừng).", "status", assistant_session_id=assistant_session_id)
                             finish_reason = "cancelled"
                             break
-
+ 
                 if agent_id in registry.agents and registry.agents[agent_id].is_cancelled:
                     break
                 
@@ -662,7 +794,7 @@ def generate_streaming_chat(agent_id: str, system_prompt: str, user_text: str, t
                 else:
                     break
             
-            registry.finalize_stream_message(agent_id)
+            registry.finalize_stream_message(agent_id, assistant_session_id=assistant_session_id)
             
             # Output WAF Guard verification
             full_text_lower = full_text.lower()
@@ -676,7 +808,7 @@ def generate_streaming_chat(agent_id: str, system_prompt: str, user_text: str, t
             print(f"[Codex Chat ERROR] Agent: {agent_id} | Attempt {attempt} failed: {e}")
             traceback.print_exc()
             
-            registry.finalize_stream_message(agent_id)
+            registry.finalize_stream_message(agent_id, assistant_session_id=assistant_session_id)
             
             if attempt < max_retries:
                 print(f"[Codex Chat] Waiting {delay} seconds before retrying...")
@@ -777,7 +909,7 @@ def execute_agent_tools(agent_id: str, text: str) -> tuple[str, bool]:
     return "\n\n---\n\n".join(outputs), did_execute
 
 
-def process_chat(agent_id: str, text: str):
+def process_chat(agent_id: str, text: str, assistant_session_id: str = None):
     global GLOBAL_MOCK
     
     # 1. Enforce permission barrier
@@ -785,12 +917,26 @@ def process_chat(agent_id: str, text: str):
         registry.add_agent_message(
             agent_id, "system", 
             "Quyền hạn bị từ chối: Chỉ các lệnh môi trường (/npm, /pip, /python, /go, /cargo) được cho phép đối với Sub-agents. Các lệnh hệ thống khác bị chặn.", 
-            "error"
+            "error",
+            assistant_session_id=assistant_session_id
         )
         return
         
+    # Save user message to assistant_chats.json if assistant_session_id is set
+    if assistant_session_id:
+        chats = load_assistant_chats()
+        session = next((s for s in chats.get("sessions", []) if s["id"] == assistant_session_id), None)
+        if session:
+            session["messages"].append({
+                "ts": datetime.now().isoformat(),
+                "role": "user",
+                "text": text,
+                "type": "chat"
+            })
+            save_assistant_chats(chats)
+
     # Add user message to registry (streams to WebSocket)
-    registry.add_agent_message(agent_id, "user", text, "chat")
+    registry.add_agent_message(agent_id, "user", text, "chat", assistant_session_id=assistant_session_id)
     
     # 2. Main Agent flow
     if agent_id == "main-agent":
@@ -824,19 +970,20 @@ def process_chat(agent_id: str, text: str):
             registry.add_agent_message(
                 "main-agent", "agent", 
                 f"⚙️ **[Steering Tool]** Đã nhận diện lệnh điều phối: **{action.upper()}** cho **{target_agent}**.\n\n*Kết quả:* {result_msg}", 
-                "chat"
+                "chat",
+                assistant_session_id=assistant_session_id
             )
             return
 
         text_upper = text.upper()
         if "UPDATE" in text_upper and registry.is_pipeline_active():
-            registry.add_agent_message("main-agent", "agent", "Đang chuyển tiếp bản cập nhật cho PM Agent...", "chat")
+            registry.add_agent_message("main-agent", "agent", "Đang chuyển tiếp bản cập nhật cho PM Agent...", "chat", assistant_session_id=assistant_session_id)
             registry.add_agent_message("pm-orchestrator", "user", f"[REVISION UPDATE]: {text}", "chat")
             return
             
         if "NEW" in text_upper and registry.is_pipeline_active():
             registry.idle_all()
-            registry.add_agent_message("main-agent", "agent", "Đã dừng các agents. Bạn có thể gửi yêu cầu khởi tạo dự án mới ngay tại đây.", "chat")
+            registry.add_agent_message("main-agent", "agent", "Đã dừng các agents. Bạn có thể gửi yêu cầu khởi tạo dự án mới ngay tại đây.", "chat", assistant_session_id=assistant_session_id)
             return
 
         # Improved Intent Parsing: Only start pipeline on explicit creation commands
@@ -851,7 +998,8 @@ def process_chat(agent_id: str, text: str):
                 registry.add_agent_message(
                     "main-agent", "agent", 
                     "⚠️ **[State Locked]** Tôi nhận thấy hệ thống đang chạy một dự án (Active). Đây là dự án mới (NEW) hay bản cập nhật (UPDATE) cho dự án hiện tại?\n\n* Nếu là **NEW**: Gõ 'NEW' để dừng dự án hiện tại và chuẩn bị tạo mới.\n* Nếu là **UPDATE**: Gõ 'UPDATE' kèm yêu cầu để tôi cập nhật cho PM Agent.", 
-                    "chat"
+                    "chat",
+                    assistant_session_id=assistant_session_id
                 )
                 return
             
@@ -864,12 +1012,27 @@ def process_chat(agent_id: str, text: str):
             
             # Set current project
             registry.current_project = project_name
+            _on_orchestrator_event("active_project_change", {"project_name": project_name})
                 
+            reply_text = f"🎯 **[PROJECT CEO Mode Activated]**\n\nTôi là LeeJ CEO. Đã nhận diện yêu cầu khởi tạo dự án.\n- **Brief:** {brief}\n- **Thư mục:** `{project_name}`\n\nĐang chuyển tiếp cho PM Agent để lập kế hoạch..."
             registry.add_agent_message(
                 "main-agent", "agent", 
-                f"🎯 **[PROJECT CEO Mode Activated]**\n\nTôi là LeeJ CEO. Đã nhận diện yêu cầu khởi tạo dự án.\n- **Brief:** {brief}\n- **Thư mục:** `{project_name}`\n\nĐang chuyển tiếp cho PM Agent để lập kế hoạch...", 
-                "chat"
+                reply_text, 
+                "chat",
+                assistant_session_id=assistant_session_id
             )
+            
+            if assistant_session_id:
+                chats = load_assistant_chats()
+                session = next((s for s in chats.get("sessions", []) if s["id"] == assistant_session_id), None)
+                if session:
+                    session["messages"].append({
+                        "ts": datetime.now().isoformat(),
+                        "role": "agent",
+                        "text": reply_text,
+                        "type": "chat"
+                    })
+                    save_assistant_chats(chats)
             
             # Start pipeline in background with parsed brief and project_name
             def _run():
@@ -904,13 +1067,37 @@ def process_chat(agent_id: str, text: str):
                 reply = f"Chào bạn! Tôi là LeeJ CEO đang ở chế độ 🎯 **PROJECT CEO**. Dự án '{registry.current_project}' đang hoạt động. Tôi đã nạp Shared Truth Context để sẵn sàng trả lời các câu hỏi về file, cấu trúc hoặc mã nguồn của bạn. Bạn muốn hỏi về phần nào?"
             else:
                 reply = "Chào bạn! Tôi là LeeJ CEO đang ở chế độ 💬 **AI ASSISTANT**. Rất vui được hỗ trợ bạn với mọi câu hỏi. Bạn có thể chuyển sang chế độ 🎯 PROJECT CEO bằng nút gạt phía trên hoặc ra lệnh khởi tạo dự án mới nhé!"
-            registry.add_agent_message("main-agent", "agent", reply, "chat")
+            
+            registry.add_agent_message("main-agent", "agent", reply, "chat", assistant_session_id=assistant_session_id)
+            
+            if assistant_session_id:
+                chats = load_assistant_chats()
+                session = next((s for s in chats.get("sessions", []) if s["id"] == assistant_session_id), None)
+                if session:
+                    session["messages"].append({
+                        "ts": datetime.now().isoformat(),
+                        "role": "agent",
+                        "text": reply,
+                        "type": "chat"
+                    })
+                    save_assistant_chats(chats)
         else:
             try:
-                generate_streaming_chat("main-agent", system_prompt, text, temperature=0.4)
+                reply = generate_streaming_chat("main-agent", system_prompt, text, temperature=0.4, assistant_session_id=assistant_session_id)
+                if assistant_session_id:
+                    chats = load_assistant_chats()
+                    session = next((s for s in chats.get("sessions", []) if s["id"] == assistant_session_id), None)
+                    if session:
+                        session["messages"].append({
+                            "ts": datetime.now().isoformat(),
+                            "role": "agent",
+                            "text": reply,
+                            "type": "chat"
+                        })
+                        save_assistant_chats(chats)
             except Exception as e:
                 reply = f"Lỗi kết nối Codex Gateway (Live Mode): {e}. Hãy kiểm tra GEMINI_API_KEY hoặc thử lại với Mock Mode."
-                registry.add_agent_message("main-agent", "agent", reply, "chat")
+                registry.add_agent_message("main-agent", "agent", reply, "chat", assistant_session_id=assistant_session_id)
         registry.set_agent_state("main-agent", AgentState.IDLE)
         return
 
@@ -1003,8 +1190,8 @@ def process_chat(agent_id: str, text: str):
         thread = threading.Thread(target=_run_waves, daemon=True)
         thread.start()
 
-def process_chat_in_thread(agent_id: str, text: str):
-    thread = threading.Thread(target=process_chat, args=(agent_id, text), daemon=True)
+def process_chat_in_thread(agent_id: str, text: str, assistant_session_id: str = None):
+    thread = threading.Thread(target=process_chat, args=(agent_id, text, assistant_session_id), daemon=True)
     thread.start()
 
 # ---------------------------------------------------------------------------
@@ -1026,8 +1213,9 @@ async def websocket_endpoint(ws: WebSocket):
             # Handle incoming chat from WebSocket
             agent_id = msg.get("agent_id")
             text = msg.get("text", "")
+            assistant_session_id = msg.get("assistant_session_id")
             if agent_id and text:
-                process_chat_in_thread(agent_id, text)
+                process_chat_in_thread(agent_id, text, assistant_session_id)
     except WebSocketDisconnect:
         manager.disconnect(ws)
 
@@ -1040,33 +1228,32 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LeeJ CEO - Enterprise Orchestrator</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-    --bg: #0f0f14;
-    --surface: #1a1a24;
-    --surface2: #22223a;
-    --border: #2d2d4a;
-    --text: #e4e4f0;
-    --text-dim: #8888a8;
+    --bg: #0b0b0f;
+    --surface: #12121a;
+    --surface2: #1c1c28;
+    --border: #252538;
+    --text: #f1f1f7;
+    --text-dim: #7f7f9c;
     --accent: #6c63ff;
     --accent-glow: rgba(108, 99, 255, 0.25);
-    --green: #22c55e;
-    --yellow: #eab308;
+    --green: #10b981;
+    --yellow: #f59e0b;
     --red: #ef4444;
     --blue: #3b82f6;
     --radius: 12px;
 }
 body.light-mode {
-    --bg: #f5f5f7;
+    --bg: #f4f5f6;
     --surface: #ffffff;
-    --surface2: #e5e5e7;
-    --border: #dcdcd1;
-    --border: #e5e5e7;
+    --surface2: #eaeaee;
+    --border: #d2d2db;
     --text: #1d1d1f;
-    --text-dim: #86868b;
+    --text-dim: #6e6e73;
     --accent: #0071e3;
     --accent-glow: rgba(0, 113, 227, 0.15);
 }
@@ -1089,30 +1276,100 @@ body {
     padding: 12px 24px;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(10px);
     flex-shrink: 0;
+    z-index: 100;
     transition: background 0.3s, border-color 0.3s;
 }
 .header h1 {
-    font-size: 18px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 19px;
     font-weight: 700;
-    background: linear-gradient(135deg, var(--accent), #8b5cf6);
+    background: linear-gradient(135deg, var(--accent), #a78bfa);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
-.header .status-dot {
+
+/* Central Project Selector / Capsule */
+#central-project-selector-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    max-width: 400px;
+    margin: 0 20px;
+}
+.project-select-dropdown {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    outline: none;
+    cursor: pointer;
+    width: 100%;
+    transition: all 0.2s ease;
+}
+.project-select-dropdown:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+}
+.project-capsule {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(135deg, rgba(108, 99, 255, 0.1), rgba(167, 139, 250, 0.1));
+    border: 1px solid var(--accent);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    box-shadow: 0 0 12px var(--accent-glow);
+    animation: pulseGlow 3s infinite alternate;
+}
+@keyframes pulseGlow {
+    0% { box-shadow: 0 0 8px rgba(108, 99, 255, 0.15); }
+    100% { box-shadow: 0 0 16px rgba(108, 99, 255, 0.35); }
+}
+.project-capsule strong {
+    color: #a78bfa;
+}
+.project-capsule-unload {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 15px;
+    padding: 0 4px;
+    line-height: 1;
+    transition: color 0.2s, transform 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.project-capsule-unload:hover {
+    color: var(--red);
+    transform: scale(1.2);
+}
+
+.header-right { display: flex; align-items: center; gap: 12px; }
+.header-right span { font-size: 12px; color: var(--text-dim); }
+.header-right .status-dot {
     width: 8px; height: 8px;
     border-radius: 50%;
     background: var(--green);
     animation: pulse 2s infinite;
-    margin-right: 8px;
+    margin-right: 4px;
     display: inline-block;
 }
 @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.4; }
 }
-.header-right { display: flex; align-items: center; gap: 12px; }
-.header-right span { font-size: 12px; color: var(--text-dim); }
 
 .btn {
     padding: 8px 18px;
@@ -1136,24 +1393,29 @@ body {
     overflow: hidden;
 }
 
-/* --- Agent Tabs Sidebar (Left) --- */
+/* --- Sidebar (Left) --- */
 .sidebar {
-    width: 240px;
+    width: 260px;
     background: var(--surface);
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
+    overflow: hidden;
     flex-shrink: 0;
     transition: background 0.3s, border-color 0.3s;
 }
 .sidebar-title {
+    font-family: 'Outfit', sans-serif;
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1.2px;
     color: var(--text-dim);
-    padding: 14px 16px 6px;
+    padding: 16px 16px 8px;
+}
+#agent-tabs {
+    overflow-y: auto;
+    max-height: 50%;
 }
 .agent-tab {
     display: flex;
@@ -1180,13 +1442,60 @@ body {
 .dot-WORKING { background: var(--blue); animation: pulse 1s infinite; }
 .dot-DONE { background: var(--green); }
 .dot-ERROR { background: var(--red); }
-.agent-tab .name { font-size: 13px; font-weight: 500; }
+.agent-tab .name { font-size: 13.5px; font-weight: 500; }
 .agent-tab .state-label {
     font-size: 10px;
     color: var(--text-dim);
     margin-left: auto;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+
+/* Assistant Chat Sessions List */
+.session-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    margin: 2px 8px;
+    transition: all 0.2s ease;
+    color: var(--text-dim);
+    background: transparent;
+}
+.session-item:hover {
+    background: var(--surface2);
+    color: var(--text);
+}
+.session-item.active-session {
+    background: var(--surface2);
+    color: var(--text);
+    border-left: 3px solid var(--accent);
+    padding-left: 9px;
+}
+.session-item .session-title {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-right: 8px;
+}
+.session-item .session-delete {
+    opacity: 0;
+    color: var(--text-dim);
+    transition: opacity 0.2s, color 0.2s;
+    font-weight: bold;
+    font-size: 14px;
+    padding: 0 4px;
+    line-height: 1;
+}
+.session-item:hover .session-delete {
+    opacity: 1;
+}
+.session-item .session-delete:hover {
+    color: var(--red);
 }
 
 /* --- Chat Panel (Center) --- */
@@ -1218,7 +1527,7 @@ body {
     color: #fff;
     background: linear-gradient(135deg, var(--accent), #8b5cf6);
 }
-.chat-header .info h3 { font-size: 14px; font-weight: 600; }
+.chat-header .info h3 { font-size: 14.5px; font-weight: 600; }
 .chat-header .info p { font-size: 11px; color: var(--text-dim); }
 
 .messages {
@@ -1227,14 +1536,14 @@ body {
     padding: 16px 20px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
 }
 .msg {
     max-width: 80%;
-    padding: 10px 14px;
+    padding: 12px 16px;
     border-radius: 12px;
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: 13.5px;
+    line-height: 1.55;
     animation: fadeIn 0.25s ease;
     word-wrap: break-word;
 }
@@ -1245,35 +1554,45 @@ body {
     background: linear-gradient(135deg, var(--accent), #8b5cf6);
     color: #fff;
     border-bottom-right-radius: 4px;
+    box-shadow: 0 4px 12px rgba(108, 99, 255, 0.15);
 }
 .msg.agent {
     align-self: flex-start;
     background: var(--surface2);
     color: var(--text);
     border-bottom-left-radius: 4px;
+    border: 1px solid var(--border);
     transition: background 0.3s, color 0.3s;
 }
 .msg.system {
     align-self: center;
     background: transparent;
     color: var(--text-dim);
-    font-size: 11px;
+    font-size: 11.5px;
     font-style: italic;
     padding: 4px 8px;
 }
 .msg.error {
     align-self: center;
-    background: rgba(239, 68, 68, 0.15);
+    background: rgba(239, 68, 68, 0.12);
     color: var(--red);
-    font-size: 12px;
-    border: 1px solid rgba(239, 68, 68, 0.3);
+    font-size: 12.5px;
+    border: 1px solid rgba(239, 68, 68, 0.25);
 }
 .msg .meta {
     font-size: 10px;
-    color: rgba(255,255,255,0.5);
-    margin-top: 4px;
+    color: rgba(255,255,255,0.45);
+    margin-top: 6px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    padding-top: 4px;
 }
-.msg.agent .meta { color: var(--text-dim); }
+body.light-mode .msg.user .meta {
+    color: rgba(255,255,255,0.7);
+}
+.msg.agent .meta {
+    color: var(--text-dim);
+    border-top: 1px solid var(--border);
+}
 
 /* Markdown Formatting */
 .msg p { margin-bottom: 8px; }
@@ -1284,14 +1603,15 @@ body {
     font-weight: 600;
     line-height: 1.25;
     color: inherit;
+    font-family: 'Outfit', sans-serif;
 }
-.msg h1 { font-size: 1.35em; }
-.msg h2 { font-size: 1.2em; }
-.msg h3 { font-size: 1.1em; }
+.msg h1 { font-size: 1.3em; }
+.msg h2 { font-size: 1.15em; }
+.msg h3 { font-size: 1.05em; }
 .msg ul, .msg ol { margin-left: 20px; margin-bottom: 8px; }
 .msg li { margin-bottom: 4px; }
 .msg pre {
-    background: #0d0d13;
+    background: #09090d;
     border: 1px solid var(--border);
     border-radius: 6px;
     padding: 10px 12px;
@@ -1300,16 +1620,16 @@ body {
 }
 .msg code {
     font-family: 'Consolas', 'Courier New', Courier, monospace;
-    font-size: 0.9em;
-    background: rgba(0, 0, 0, 0.25);
-    padding: 2px 4px;
+    font-size: 0.88em;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 2px 5px;
     border-radius: 4px;
 }
 .msg pre code {
     background: transparent;
     padding: 0;
     border-radius: 0;
-    font-size: 0.85em;
+    font-size: 0.84em;
     color: #e4e4f0;
 }
 
@@ -1330,14 +1650,14 @@ body {
     border-radius: 8px;
     padding: 10px 14px;
     color: var(--text);
-    font-size: 13px;
+    font-size: 13.5px;
     outline: none;
     resize: none;
     transition: background 0.3s, border-color 0.3s, color 0.3s;
 }
 .chat-input-bar textarea:focus { border-color: var(--accent); }
 .chat-input-bar button {
-    padding: 10px 20px;
+    padding: 10px 22px;
     background: linear-gradient(135deg, var(--accent), #8b5cf6);
     border: none;
     border-radius: 8px;
@@ -1354,17 +1674,17 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: 10px;
-    padding: 2px 8px;
+    font-size: 10.5px;
+    padding: 3px 10px;
     border-radius: 100px;
     background: rgba(239, 68, 68, 0.12);
     color: var(--red);
     border: 1px solid rgba(239, 68, 68, 0.2);
 }
 .permission-badge.safe {
-    background: rgba(34, 197, 94, 0.12);
+    background: rgba(16, 185, 129, 0.12);
     color: var(--green);
-    border-color: rgba(34, 197, 94, 0.2);
+    border-color: rgba(16, 185, 129, 0.2);
 }
 
 /* --- Project Panel (Right Sidebar) --- */
@@ -1390,7 +1710,8 @@ body {
     transition: background 0.3s, border-color 0.3s;
 }
 .panel-section h3 {
-    font-size: 13px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 13.5px;
     font-weight: 700;
     color: var(--text);
     border-bottom: 1px solid var(--border);
@@ -1401,7 +1722,7 @@ body {
     gap: 6px;
 }
 .project-list-title {
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 700;
     color: var(--text-dim);
     text-transform: uppercase;
@@ -1459,13 +1780,13 @@ body {
     border-radius: 4px;
     text-transform: uppercase;
 }
-.status-badge.active { background: rgba(34, 197, 94, 0.15); color: var(--green); }
+.status-badge.active { background: rgba(16, 185, 129, 0.15); color: var(--green); }
 .status-badge.archived { background: rgba(255, 255, 255, 0.1); color: var(--text-dim); }
-.status-badge.on-hold { background: rgba(234, 179, 8, 0.15); color: var(--yellow); }
+.status-badge.on-hold { background: rgba(245, 158, 11, 0.15); color: var(--yellow); }
 
 /* --- Q&A Bridge Banner --- */
 .qa-bridge-banner {
-    background: linear-gradient(135deg, rgba(108, 99, 255, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
+    background: linear-gradient(135deg, rgba(108, 99, 255, 0.12) 0%, rgba(167, 139, 250, 0.12) 100%);
     border: 1px solid var(--accent);
     border-radius: var(--radius);
     padding: 14px;
@@ -1673,6 +1994,12 @@ body {
 <body>
 <div class="header">
     <h1>💎 LeeJ CEO &mdash; Enterprise Orchestrator</h1>
+    
+    <!-- Central Project Selector Container -->
+    <div id="central-project-selector-container">
+        <!-- Rendered dynamically (Dropdown or Capsule) -->
+    </div>
+    
     <div class="header-right">
         <span class="status-dot"></span>
         <span id="ws-status">Connecting...</span>
@@ -1681,10 +2008,22 @@ body {
 
 <div class="main">
     <div class="sidebar">
-        <div class="sidebar-title">Phòng Làm Việc Agent</div>
+        <!-- System Agents section -->
+        <div class="sidebar-title" id="sidebar-agents-title">Trợ lý AI</div>
         <div id="agent-tabs"></div>
         
-        <!-- Theme Toggle 9router -->
+        <!-- Assistant Chat Sessions section -->
+        <div id="assistant-sessions-section" style="display: flex; flex-direction: column; flex: 1; border-top: 1px solid var(--border); margin-top: 12px; overflow: hidden;">
+            <div class="sidebar-title" style="display: flex; align-items: center; justify-content: space-between;">
+                <span>Phiên Chat</span>
+                <button class="btn" onclick="createNewSession()" style="padding: 2px 8px; font-size: 10px; border-radius: 4px; background: var(--accent); color: white; border: none; cursor: pointer;">+ New Chat</button>
+            </div>
+            <div id="assistant-sessions-list" style="overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 4px 0;">
+                <!-- Rendered dynamically -->
+            </div>
+        </div>
+        
+        <!-- Theme Toggle -->
         <div class="theme-toggle-container" style="padding: 12px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; margin-top: auto; flex-shrink: 0;">
             <span style="font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; color: var(--text-dim);">Chế độ</span>
             <button onclick="toggleTheme()" id="theme-toggle-btn" class="btn" style="padding: 6px 12px; background: var(--surface2); color: var(--text); border: 1px solid var(--border); font-size: 11px; font-weight: 600; border-radius: 6px; display: flex; align-items: center; gap: 4px;">
@@ -1724,7 +2063,7 @@ body {
         <div class="messages" id="messages"></div>
         
         <div class="chat-input-bar">
-            <textarea id="chat-input" placeholder="Nhập tin nhắn để chỉ đạo..." rows="2" onkeydown="handleChatKey(event)"></textarea>
+            <textarea id="chat-input" placeholder="Nhập tin nhắn..." rows="2" onkeydown="handleChatKey(event)"></textarea>
             <button id="btn-send" onclick="sendChat()">Send</button>
         </div>
     </div>
@@ -1732,7 +2071,7 @@ body {
     <!-- Project Panel (Right Sidebar - Explorer Only) -->
     <div class="project-panel">
         <div class="panel-section" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; height: 100%;">
-            <h3>📂 Danh sách dự án</h3>
+            <h3>📂 Xem mã nguồn dự án</h3>
             <div id="project-list" style="overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
                 <!-- Projects rendered dynamically -->
             </div>
@@ -1764,7 +2103,11 @@ let ws;
 let agents = [];
 let activeAgent = null;
 let agentMessages = {};
-let currentProject = 'web-project';
+let currentProject = '';
+
+// Assistant session manager variables
+let activeAssistantSessionId = null;
+let assistantSessions = [];
 
 // Q&A Bridge globals
 let qaAgentIdPending = null;
@@ -1784,7 +2127,8 @@ function updateDualStateUI() {
     const labelCeo = document.getElementById('label-ceo');
 
     if (toggleContainer) {
-        if (activeAgent === 'main-agent') {
+        // Chỉ hiện nút gạt Dual-State khi có dự án hoạt động (active project) và đang xem chat của main-agent
+        if (activeAgent === 'main-agent' && currentProject) {
             toggleContainer.classList.add('visible');
         } else {
             toggleContainer.classList.remove('visible');
@@ -1820,22 +2164,25 @@ async function toggleLeejCeoMode(isChecked) {
         const data = await resp.json();
         if (data.error) {
             console.error('Failed to update CEO mode on backend:', data.error);
+        } else {
+            // Sau khi chuyển chế độ, tải lại giao diện
+            renderTabs();
+            if (newMode === 'assistant') {
+                if (activeAssistantSessionId) {
+                    loadAssistantSessionMessages(activeAssistantSessionId);
+                } else {
+                    await loadAssistantSessions();
+                }
+            } else {
+                // CEO Mode -> nạp lại lịch sử chat của dự án active
+                if (currentProject) {
+                    agentMessages = {};
+                    selectAgent(activeAgent || 'main-agent');
+                }
+            }
         }
     } catch (e) {
         console.error('Failed to update CEO mode:', e);
-    }
-}
-
-async function fetchCeoMode() {
-    try {
-        const resp = await fetch('/api/leej_ceo/mode');
-        const data = await resp.json();
-        if (data.mode) {
-            leejCeoMode = data.mode;
-            updateDualStateUI();
-        }
-    } catch (e) {
-        console.error('Failed to fetch CEO mode:', e);
     }
 }
 
@@ -1846,7 +2193,6 @@ function toggleProjectAccordion(name, cardEl) {
         expandedProjects.add(name);
     }
     
-    // Toggle classes on the element immediately for zero-lag UI response
     if (cardEl) {
         const arrow = cardEl.querySelector('.accordion-arrow');
         const container = cardEl.querySelector('.accordion-files-container');
@@ -1877,18 +2223,35 @@ function connect() {
 function handleEvent(msg) {
     if (msg.event === 'init') {
         agents = msg.agents;
-        currentProject = msg.current_project || 'web-project';
+        currentProject = msg.current_project || '';
         
         agents.forEach(a => {
             if (!agentMessages[a.agent_id]) agentMessages[a.agent_id] = [];
-            // Rebrand in-memory
             if (a.agent_id === 'main-agent') {
                 a.display_name = 'LeeJ CEO';
             }
         });
-        renderTabs();
-        if (!activeAgent && agents.length > 0) selectAgent(agents[0].agent_id);
+        
+        fetchActiveProject();
         loadProjects();
+    }
+    else if (msg.event === 'active_project_change') {
+        currentProject = msg.project_name || '';
+        renderCentralProjectSelector();
+        updateDualStateUI();
+        renderTabs();
+        loadProjects();
+    }
+    else if (msg.event === 'leej_ceo_mode_change') {
+        leejCeoMode = msg.mode || 'assistant';
+        updateDualStateUI();
+        renderTabs();
+        if (leejCeoMode === 'assistant') {
+            loadAssistantSessions();
+        } else {
+            agentMessages = {};
+            selectAgent(activeAgent || 'main-agent');
+        }
     }
     else if (msg.event === 'state_change') {
         const a = agents.find(x => x.agent_id === msg.agent_id);
@@ -1900,32 +2263,47 @@ function handleEvent(msg) {
     }
     else if (msg.event === 'message') {
         const id = msg.agent_id;
+        
+        // Lọc và cô lập tin nhắn của LeeJ CEO theo mode
+        if (id === 'main-agent') {
+            if (leejCeoMode === 'assistant') {
+                if (msg.assistant_session_id !== activeAssistantSessionId) return;
+            } else {
+                if (msg.active_project_id !== currentProject) return;
+            }
+        }
+        
         if (!agentMessages[id]) agentMessages[id] = [];
         agentMessages[id].push({ ts: msg.ts, role: msg.role, text: msg.text, type: msg.type });
         if (activeAgent === id) renderMessages();
-        // Flash tab
+        
+        // Flash tab if not active
         const tab = document.querySelector(`[data-agent="${id}"]`);
         if (tab && activeAgent !== id) {
             tab.style.background = 'rgba(108,99,255,0.15)';
             setTimeout(() => { tab.style.background = ''; }, 1500);
         }
     }
-    else if (msg.event === 'leej_ceo_mode_change') {
-        leejCeoMode = msg.mode || 'assistant';
-        updateDualStateUI();
-    }
     else if (msg.event === 'message_stream') {
         const id = msg.agent_id;
+        
+        // Lọc và cô lập tin nhắn của LeeJ CEO theo mode
+        if (id === 'main-agent') {
+            if (leejCeoMode === 'assistant') {
+                if (msg.assistant_session_id !== activeAssistantSessionId) return;
+            } else {
+                if (msg.active_project_id !== currentProject) return;
+            }
+        }
+        
         if (!agentMessages[id]) agentMessages[id] = [];
         const lastMsg = agentMessages[id][agentMessages[id].length - 1];
         
         let isNewBubble = false;
         if (lastMsg && lastMsg.role === msg.role && lastMsg.stream === true) {
-            // Update existing stream bubble in-place (typing effect)
             lastMsg.text = msg.text;
             lastMsg.ts = msg.ts;
         } else {
-            // Start a new stream bubble
             agentMessages[id].push({ ts: msg.ts, role: msg.role, text: msg.text, type: msg.type, stream: true });
             isNewBubble = true;
         }
@@ -1934,13 +2312,11 @@ function handleEvent(msg) {
             if (isNewBubble) {
                 renderMessages();
             } else {
-                // Update the last message bubble in-place directly to optimize streaming & prevent flickering
                 const originalIndex = agentMessages[id].length - 1;
                 const msgId = `msg-${id}-${originalIndex}`;
                 const node = document.getElementById(msgId);
                 if (node) {
                     const contentDiv = node.querySelector('.msg-content');
-                    // Strip the QA bridge token before parsing markdown
                     let cleanText = msg.text || '';
                     const qaRegex = /\[QA_BRIDGE_QUESTION:([a-zA-Z0-9_-]+)\]/;
                     cleanText = cleanText.replace(qaRegex, '').trim();
@@ -1950,7 +2326,6 @@ function handleEvent(msg) {
                         contentDiv.innerHTML = htmlContent;
                     }
                     
-                    // Auto-scroll if close to bottom
                     const container = document.getElementById('messages');
                     const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 120;
                     if (isNearBottom) {
@@ -1961,7 +2336,7 @@ function handleEvent(msg) {
                 }
             }
         }
-        // Subtle flash on tab if not active
+        
         const streamTab = document.querySelector(`[data-agent="${id}"]`);
         if (streamTab && activeAgent !== id) {
             streamTab.style.borderLeftColor = 'var(--blue)';
@@ -1969,12 +2344,22 @@ function handleEvent(msg) {
     }
     else if (msg.event === 'message_stream_end') {
         const id = msg.agent_id;
+        
+        // Lọc và cô lập tin nhắn của LeeJ CEO theo mode
+        if (id === 'main-agent') {
+            if (leejCeoMode === 'assistant') {
+                if (msg.assistant_session_id !== activeAssistantSessionId) return;
+            } else {
+                if (msg.active_project_id !== currentProject) return;
+            }
+        }
+        
         if (agentMessages[id] && agentMessages[id].length > 0) {
             const last = agentMessages[id][agentMessages[id].length - 1];
             if (last.stream === true) last.stream = false;
         }
         if (activeAgent === id) renderMessages();
-        // Reset tab flash
+        
         const streamTabEnd = document.querySelector(`[data-agent="${id}"]`);
         if (streamTabEnd && activeAgent !== id) {
             streamTabEnd.style.borderLeftColor = '';
@@ -2011,7 +2396,22 @@ function cancelAgent() {
 
 function renderTabs() {
     const container = document.getElementById('agent-tabs');
-    container.innerHTML = agents.map(a => {
+    const sessionSection = document.getElementById('assistant-sessions-section');
+    const sidebarAgentsTitle = document.getElementById('sidebar-agents-title');
+    
+    let filteredAgents = agents;
+    if (leejCeoMode === 'assistant') {
+        // Assistant Mode: chỉ hiện LeeJ CEO
+        filteredAgents = agents.filter(a => a.agent_id === 'main-agent');
+        if (sessionSection) sessionSection.style.display = 'flex';
+        if (sidebarAgentsTitle) sidebarAgentsTitle.textContent = 'Trợ lý AI';
+    } else {
+        // CEO Mode: hiện đầy đủ sub-agents
+        if (sessionSection) sessionSection.style.display = 'none';
+        if (sidebarAgentsTitle) sidebarAgentsTitle.textContent = 'Hệ thống Agent';
+    }
+    
+    container.innerHTML = filteredAgents.map(a => {
         const dName = a.agent_id === 'main-agent' ? 'LeeJ CEO' : a.display_name;
         return `
             <div class="agent-tab ${activeAgent === a.agent_id ? 'active' : ''}"
@@ -2029,8 +2429,6 @@ function renderTabs() {
 function selectAgent(id) {
     activeAgent = id;
     renderTabs();
-    
-    // Toggle dual-state view container based on agent ID
     updateDualStateUI();
     
     const a = agents.find(x => x.agent_id === id);
@@ -2042,6 +2440,7 @@ function selectAgent(id) {
     document.getElementById('chat-avatar').textContent = dName.split(' ').map(w=>w[0]).join('');
     document.getElementById('chat-agent-name').textContent = dName;
     document.getElementById('chat-agent-role').textContent = dRole + ' | ' + a.model;
+    
     const perm = document.getElementById('chat-permission');
     if (a.privileged) {
         perm.className = 'permission-badge safe';
@@ -2051,10 +2450,13 @@ function selectAgent(id) {
         perm.innerHTML = '🟢 Env Access (npm/pip allowed)';
     }
     
-    document.getElementById('messages').innerHTML = ''; // clear for new agent
+    document.getElementById('messages').innerHTML = '';
     
-    // Fetch messages from API if we have none cached
-    if (!agentMessages[id] || agentMessages[id].length === 0) {
+    if (id === 'main-agent' && leejCeoMode === 'assistant') {
+        if (activeAssistantSessionId) {
+            loadAssistantSessionMessages(activeAssistantSessionId);
+        }
+    } else {
         fetch(`/api/agents/${id}/messages`).then(r=>r.json()).then(msgs => {
             const hasStream = agentMessages[id] && agentMessages[id].some(m => m.stream === true);
             if (!hasStream) {
@@ -2065,8 +2467,6 @@ function selectAgent(id) {
             }
             renderMessages();
         });
-    } else {
-        renderMessages();
     }
 }
 
@@ -2074,7 +2474,6 @@ function renderMessages() {
     const container = document.getElementById('messages');
     const msgs = agentMessages[activeAgent] || [];
     
-    // Scrutinize Q&A Bridge pending token on the active agent (specifically main-agent/LeeJ CEO)
     let pendingQaAgentId = null;
     let pendingQaQuestion = '';
     
@@ -2082,7 +2481,6 @@ function renderMessages() {
         for (let i = msgs.length - 1; i >= 0; i--) {
             const m = msgs[i];
             if (m.role === 'user') {
-                // If user sent a reply after the QA bridge question, it's considered answered
                 break;
             }
             const qaRegex = /\[QA_BRIDGE_QUESTION:([a-zA-Z0-9_-]+)\]/;
@@ -2102,8 +2500,6 @@ function renderMessages() {
         Array.from(container.children).forEach(child => existingIds.add(child.id));
         
         const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 120;
-        
-        // Limit to last 50 messages to free browser memory
         const displayMsgs = msgs.slice(-50);
         
         displayMsgs.forEach((m) => {
@@ -2132,7 +2528,6 @@ function renderMessages() {
             const contentDiv = node.querySelector('.msg-content');
             const metaDiv = node.querySelector('.meta');
             
-            // Clean dynamic token before processing markdown
             let displayTemplate = m.text || '';
             let qaAgentId = null;
             const qaRegex = /\[QA_BRIDGE_QUESTION:([a-zA-Z0-9_-]+)\]/;
@@ -2152,7 +2547,6 @@ function renderMessages() {
                 metaDiv.innerHTML = metaText;
             }
             
-            // Inject Quick Reply buttons if this is an active pending Q&A Bridge question bubble
             let quickRepliesDiv = node.querySelector('.qa-quick-replies');
             if (qaAgentId && qaAgentId === qaAgentIdPending) {
                 if (!quickRepliesDiv) {
@@ -2166,7 +2560,7 @@ function renderMessages() {
                 const escapedQuestion = qaQuestionPending.replace(/`/g, '\\`').replace(/\$/g, '\\$').replace(/"/g, '&quot;');
                 quickRepliesDiv.innerHTML = `
                     <button class="btn" onclick="qaUserFill()" style="background: rgba(108, 99, 255, 0.12); color: var(--accent); border: 1px solid rgba(108, 99, 255, 0.25); padding: 4px 10px; font-size: 11px; border-radius: 6px; font-weight: 600;">[User tự điền]</button>
-                    <button class="btn" id="btn-suggest-${qaAgentId}" onclick="qaCeoSuggest('${qaAgentId}', \`${escapedQuestion}\`)" style="background: rgba(34, 197, 94, 0.12); color: var(--green); border: 1px solid rgba(34, 197, 94, 0.25); padding: 4px 10px; font-size: 11px; border-radius: 6px; font-weight: 600;">[LeeJ CEO đề xuất]</button>
+                    <button class="btn" id="btn-suggest-${qaAgentId}" onclick="qaCeoSuggest('${qaAgentId}', \`${escapedQuestion}\`)" style="background: rgba(16, 185, 129, 0.12); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.25); padding: 4px 10px; font-size: 11px; border-radius: 6px; font-weight: 600;">[LeeJ CEO đề xuất]</button>
                 `;
             } else {
                 if (quickRepliesDiv) {
@@ -2177,13 +2571,11 @@ function renderMessages() {
             existingIds.delete(msgId);
         });
         
-        // Cleanup older DOM nodes outside the 50 messages window
         existingIds.forEach(id => {
             const n = document.getElementById(id);
             if (n) n.remove();
         });
         
-        // Auto-scroll only if near bottom or if the last message is from user
         if (isNearBottom || (msgs.length > 0 && msgs[msgs.length - 1].role === 'user')) {
             container.scrollTop = container.scrollHeight;
         }
@@ -2236,12 +2628,13 @@ function sendChat() {
     if (!text || !activeAgent) return;
     input.value = '';
     
-    // Auto-forward logic: if we are talking to LeeJ CEO (main-agent) and there is a pending QA question
+    const payload = { agent_id: activeAgent, text: text };
+    if (leejCeoMode === 'assistant' && activeAgent === 'main-agent') {
+        payload.assistant_session_id = activeAssistantSessionId;
+    }
+    
     if (activeAgent === 'main-agent' && qaAgentIdPending) {
-        // Send a message to WebSocket to display the user reply bubble in-place immediately
-        ws.send(JSON.stringify({ agent_id: activeAgent, text: text }));
-        
-        // Post reply to the PM bridge API endpoint
+        ws.send(JSON.stringify(payload));
         fetch('/api/pm/answer', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2255,8 +2648,7 @@ function sendChat() {
             }
         });
     } else {
-        // Normal text message submission
-        ws.send(JSON.stringify({ agent_id: activeAgent, text: text }));
+        ws.send(JSON.stringify(payload));
     }
 }
 
@@ -2267,6 +2659,207 @@ function handleChatKey(event) {
     }
 }
 
+// Assistant Chat Sessions CRUD
+async function loadAssistantSessions() {
+    try {
+        const resp = await fetch('/api/assistant/sessions');
+        assistantSessions = await resp.json();
+        
+        if (assistantSessions.length === 0) {
+            await createNewSession();
+            return;
+        }
+        
+        if (!activeAssistantSessionId || !assistantSessions.some(s => s.id === activeAssistantSessionId)) {
+            activeAssistantSessionId = assistantSessions[0].id;
+        }
+        
+        renderAssistantSessions();
+        if (leejCeoMode === 'assistant' && activeAgent === 'main-agent') {
+            loadAssistantSessionMessages(activeAssistantSessionId);
+        }
+    } catch (e) {
+        console.error('Failed to load assistant sessions:', e);
+    }
+}
+
+function renderAssistantSessions() {
+    const listContainer = document.getElementById('assistant-sessions-list');
+    if (!listContainer) return;
+    
+    listContainer.innerHTML = assistantSessions.map(s => {
+        const isActive = s.id === activeAssistantSessionId ? 'active-session' : '';
+        return `
+            <div class="session-item ${isActive}" onclick="selectAssistantSession('${s.id}')">
+                <span class="session-title">${escapeHtml(s.title)}</span>
+                <span class="session-delete" onclick="deleteSession(event, '${s.id}')">&times;</span>
+            </div>
+        `;
+    }).join('');
+}
+
+async function selectAssistantSession(id) {
+    activeAssistantSessionId = id;
+    renderAssistantSessions();
+    
+    try {
+        await fetch('/api/assistant/sessions/select', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: id })
+        });
+        
+        if (activeAgent === 'main-agent') {
+            loadAssistantSessionMessages(id);
+        }
+    } catch (e) {
+        console.error('Failed to select session:', e);
+    }
+}
+
+async function createNewSession() {
+    try {
+        const title = `Chat ${new Date().toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}`;
+        const resp = await fetch('/api/assistant/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: title })
+        });
+        const newSession = await resp.json();
+        activeAssistantSessionId = newSession.id;
+        await loadAssistantSessions();
+    } catch (e) {
+        console.error('Failed to create new session:', e);
+    }
+}
+
+async function deleteSession(event, id) {
+    if (event) event.stopPropagation();
+    if (!confirm('Bạn có chắc muốn xóa phiên chat này?')) return;
+    
+    try {
+        await fetch(`/api/assistant/sessions/${id}`, { method: 'DELETE' });
+        if (activeAssistantSessionId === id) {
+            activeAssistantSessionId = null;
+        }
+        await loadAssistantSessions();
+    } catch (e) {
+        console.error('Failed to delete session:', e);
+    }
+}
+
+async function loadAssistantSessionMessages(id) {
+    try {
+        const resp = await fetch(`/api/assistant/sessions/${id}/messages`);
+        const msgs = await resp.json();
+        agentMessages['main-agent'] = msgs;
+        renderMessages();
+    } catch (e) {
+        console.error('Failed to load session messages:', e);
+    }
+}
+
+// Active Project (Header) Manager
+async function fetchActiveProject() {
+    try {
+        const resp = await fetch('/api/leej_ceo/active_project');
+        const data = await resp.json();
+        currentProject = data.project_name;
+        leejCeoMode = data.leej_ceo_mode;
+        
+        renderCentralProjectSelector();
+        updateDualStateUI();
+        renderTabs();
+    } catch (e) {
+        console.error('Failed to fetch active project:', e);
+    }
+}
+
+async function renderCentralProjectSelector() {
+    const container = document.getElementById('central-project-selector-container');
+    if (!container) return;
+    
+    if (currentProject) {
+        container.innerHTML = `
+            <div class="project-capsule">
+                <span>🎯 Dự án: <strong>${escapeHtml(currentProject)}</strong></span>
+                <button class="project-capsule-unload" onclick="unloadActiveProject()" title="Hủy nạp dự án và quay về chế độ Assistant">&times;</button>
+            </div>
+        `;
+    } else {
+        try {
+            const resp = await fetch('/api/projects/list');
+            const projects = await resp.json();
+            
+            let optionsHtml = '<option value="">[ 📂 Chọn dự án hoạt động ▾ ]</option>';
+            projects.forEach(p => {
+                optionsHtml += `<option value="${escapeHtml(p.project_name)}">${escapeHtml(p.project_name)} (${p.status})</option>`;
+            });
+            
+            container.innerHTML = `
+                <select class="project-select-dropdown" onchange="if(this.value) loadActiveProject(this.value)">
+                    ${optionsHtml}
+                </select>
+            `;
+        } catch (e) {
+            console.error('Failed to render project selector:', e);
+            container.innerHTML = '<span style="font-size:11px;color:var(--text-dim)">Lỗi tải dự án</span>';
+        }
+    }
+}
+
+async function loadActiveProject(name) {
+    try {
+        const resp = await fetch('/api/leej_ceo/active_project', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ project_name: name })
+        });
+        const data = await resp.json();
+        if (data.error) {
+            alert('Lỗi: ' + data.error);
+            return;
+        }
+        currentProject = name;
+        leejCeoMode = 'ceo';
+        
+        agentMessages = {};
+        activeAgent = 'main-agent';
+        
+        renderCentralProjectSelector();
+        updateDualStateUI();
+        renderTabs();
+        selectAgent(activeAgent);
+        loadProjects();
+    } catch (e) {
+        console.error('Failed to load project:', e);
+    }
+}
+
+async function unloadActiveProject() {
+    if (!confirm('Bạn có chắc muốn hủy nạp dự án hiện tại? Mọi tiến trình của sub-agents sẽ được đưa về chế độ chờ, và hệ thống sẽ quay về chế độ Assistant.')) return;
+    
+    try {
+        const resp = await fetch('/api/leej_ceo/active_project/unload', { method: 'POST' });
+        const data = await resp.json();
+        currentProject = '';
+        leejCeoMode = 'assistant';
+        
+        agentMessages = {};
+        activeAgent = 'main-agent';
+        
+        renderCentralProjectSelector();
+        updateDualStateUI();
+        renderTabs();
+        
+        await loadAssistantSessions();
+        loadProjects();
+    } catch (e) {
+        console.error('Failed to unload project:', e);
+    }
+}
+
+// Render Sidebar projects list
 async function loadProjects() {
     try {
         const resp = await fetch('/api/projects/list');
@@ -2405,24 +2998,9 @@ async function deleteFile() {
     }
 }
 
-async function loadProject(name, cardEl) {
-    // Toggle accordion state locally for immediate UX transition
+function loadProject(name, cardEl) {
+    // Accordion sidebar phải chỉ toggle mở/đóng danh sách file, không làm thay đổi active project của hệ thống.
     toggleProjectAccordion(name, cardEl);
-    
-    try {
-        const resp = await fetch(`/api/project/load?name=${name}`);
-        const data = await resp.json();
-        if (data.error) {
-            alert('Lỗi: ' + data.error);
-            return;
-        }
-        currentProject = name;
-        agentMessages = {};
-        selectAgent(activeAgent || 'main-agent');
-        await loadProjects();
-    } catch (e) {
-        console.error('Failed to load project:', e);
-    }
 }
 
 async function submitPmAnswer() {
@@ -2474,7 +3052,6 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
-// 9router Theme Toggling implementation
 function toggleTheme() {
     const body = document.body;
     body.classList.toggle('light-mode');
@@ -2502,10 +3079,8 @@ function initTheme() {
     }
 }
 
-// Initialize theme and socket connection
 initTheme();
 connect();
-fetchCeoMode();
 </script>
 </body>
 </html>"""

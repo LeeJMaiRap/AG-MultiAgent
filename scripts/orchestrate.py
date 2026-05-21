@@ -198,7 +198,7 @@ class OrchestratorRegistry:
         self._initialized = True
         self.agents: Dict[str, AgentInfo] = {}
         self._listeners: List[Callable] = []
-        self.current_project = "web-project"
+        self.current_project = ""
         self.current_brief = ""
         self.leej_ceo_mode = "assistant"  # Chế độ mặc định: "assistant" hoặc "ceo"
         self.mock_mode = True
@@ -236,31 +236,48 @@ class OrchestratorRegistry:
         self.agents[agent_id].set_state(state, task)
         self._notify("state_change", {"agent_id": agent_id, "state": state.value, "task": task})
 
-    def add_agent_message(self, agent_id: str, role: str, text: str, msg_type: str = "info"):
+    def add_agent_message(self, agent_id: str, role: str, text: str, msg_type: str = "info", assistant_session_id: str = None):
         if agent_id not in self.agents:
             return
-        self.agents[agent_id].add_message(role, text, msg_type)
-        self._notify("message", {"agent_id": agent_id, "role": role, "text": text, "type": msg_type})
-        try:
-            self.save_chat_history(self.current_project)
-        except Exception:
-            pass
-
-    def stream_agent_message(self, agent_id: str, role: str, text: str, msg_type: str = "info"):
-        if agent_id not in self.agents:
-            return
-        agent = self.agents[agent_id]
-        if agent.messages and agent.messages[-1]["role"] == role and agent.messages[-1].get("stream") is True:
-            agent.messages[-1]["text"] = text
-            agent.messages[-1]["ts"] = datetime.now().isoformat()
+        
+        # In assistant mode, we do NOT mutate global in-memory project main-agent history.
+        # But we still want to notify the client through WS.
+        if not assistant_session_id:
+            self.agents[agent_id].add_message(role, text, msg_type)
+            
+        payload = {"agent_id": agent_id, "role": role, "text": text, "type": msg_type}
+        if assistant_session_id:
+            payload["assistant_session_id"] = assistant_session_id
         else:
-            agent.messages.append({
-                "ts": datetime.now().isoformat(),
-                "role": role,
-                "text": text,
-                "type": msg_type,
-                "stream": True
-            })
+            if self.current_project:
+                payload["active_project_id"] = self.current_project
+                
+        self._notify("message", payload)
+        
+        if not assistant_session_id and self.current_project:
+            try:
+                self.save_chat_history(self.current_project)
+            except Exception:
+                pass
+
+    def stream_agent_message(self, agent_id: str, role: str, text: str, msg_type: str = "info", assistant_session_id: str = None):
+        if agent_id not in self.agents:
+            return
+        
+        # For assistant mode, we do not append stream bubbles to memory agent messages to prevent project leak
+        if not assistant_session_id:
+            agent = self.agents[agent_id]
+            if agent.messages and agent.messages[-1]["role"] == role and agent.messages[-1].get("stream") is True:
+                agent.messages[-1]["text"] = text
+                agent.messages[-1]["ts"] = datetime.now().isoformat()
+            else:
+                agent.messages.append({
+                    "ts": datetime.now().isoformat(),
+                    "role": role,
+                    "text": text,
+                    "type": msg_type,
+                    "stream": True
+                })
 
         # Apply WebSocket Throttling
         now = time.time()
@@ -269,51 +286,87 @@ class OrchestratorRegistry:
         if not hasattr(self, "_last_stream_text"):
             self._last_stream_text = {}
 
-        last_time = self._last_stream_time.get(agent_id, 0.0)
-        last_text = self._last_stream_text.get(agent_id, "")
+        throttle_key = f"{agent_id}_{assistant_session_id or ''}"
+        last_time = self._last_stream_time.get(throttle_key, 0.0)
+        last_text = self._last_stream_text.get(throttle_key, "")
         
-        # Only broadcast WebSocket if:
-        # 1. First token (last_time == 0)
-        # 2. OR elapsed time >= 50ms (0.05 seconds)
-        # 3. OR aggregated text length grew by >= 10 characters
         if last_time == 0.0 or (now - last_time >= 0.05) or (len(text) - len(last_text) >= 10):
-            self._last_stream_time[agent_id] = now
-            self._last_stream_text[agent_id] = text
+            self._last_stream_time[throttle_key] = now
+            self._last_stream_text[throttle_key] = text
             
-            self._notify("message_stream", {
+            payload = {
                 "agent_id": agent_id,
                 "role": role,
                 "text": text,
                 "type": msg_type,
                 "ts": datetime.now().isoformat()
-            })
+            }
+            if assistant_session_id:
+                payload["assistant_session_id"] = assistant_session_id
+            else:
+                if self.current_project:
+                    payload["active_project_id"] = self.current_project
+                    
+            self._notify("message_stream", payload)
 
-    def finalize_stream_message(self, agent_id: str):
+    def finalize_stream_message(self, agent_id: str, assistant_session_id: str = None):
         if agent_id not in self.agents:
             return
-        agent = self.agents[agent_id]
-        if agent.messages and agent.messages[-1].get("stream") is True:
-            agent.messages[-1]["stream"] = False
-            # Force notify the absolute final text to guarantee 100% data consistency
-            self._notify("message_stream", {
-                "agent_id": agent_id,
-                "role": agent.messages[-1]["role"],
-                "text": agent.messages[-1]["text"],
-                "type": agent.messages[-1]["type"],
-                "ts": agent.messages[-1]["ts"]
-            })
+        
+        final_role = "agent"
+        final_text = ""
+        final_type = "chat"
+        final_ts = datetime.now().isoformat()
 
-        # Reset throttling cache for this agent
-        if hasattr(self, "_last_stream_time") and agent_id in self._last_stream_time:
-            self._last_stream_time[agent_id] = 0.0
-        if hasattr(self, "_last_stream_text") and agent_id in self._last_stream_text:
-            self._last_stream_text[agent_id] = ""
+        if not assistant_session_id:
+            agent = self.agents[agent_id]
+            if agent.messages and agent.messages[-1].get("stream") is True:
+                agent.messages[-1]["stream"] = False
+                final_role = agent.messages[-1]["role"]
+                final_text = agent.messages[-1]["text"]
+                final_type = agent.messages[-1]["type"]
+                final_ts = agent.messages[-1]["ts"]
+        else:
+            throttle_key = f"{agent_id}_{assistant_session_id}"
+            final_text = getattr(self, "_last_stream_text", {}).get(throttle_key, "")
+            final_role = "agent"
 
-        self._notify("message_stream_end", {"agent_id": agent_id})
-        try:
-            self.save_chat_history(self.current_project)
-        except Exception:
-            pass
+        payload_stream = {
+            "agent_id": agent_id,
+            "role": final_role,
+            "text": final_text,
+            "type": final_type,
+            "ts": final_ts
+        }
+        if assistant_session_id:
+            payload_stream["assistant_session_id"] = assistant_session_id
+        else:
+            if self.current_project:
+                payload_stream["active_project_id"] = self.current_project
+                
+        self._notify("message_stream", payload_stream)
+
+        # Reset throttling cache
+        throttle_key = f"{agent_id}_{assistant_session_id or ''}"
+        if hasattr(self, "_last_stream_time") and throttle_key in self._last_stream_time:
+            self._last_stream_time[throttle_key] = 0.0
+        if hasattr(self, "_last_stream_text") and throttle_key in self._last_stream_text:
+            self._last_stream_text[throttle_key] = ""
+
+        payload_end = {"agent_id": agent_id}
+        if assistant_session_id:
+            payload_end["assistant_session_id"] = assistant_session_id
+        else:
+            if self.current_project:
+                payload_end["active_project_id"] = self.current_project
+                
+        self._notify("message_stream_end", payload_end)
+        
+        if not assistant_session_id and self.current_project:
+            try:
+                self.save_chat_history(self.current_project)
+            except Exception:
+                pass
 
     def get_all_states(self) -> List[dict]:
         return [a.to_dict() for a in self.agents.values()]
