@@ -172,16 +172,23 @@ def process_chat(agent_id: str, text: str):
             reply = "Chào bạn! Tôi là Agent Chính (AG2.0). Rất vui được hỗ trợ bạn. Các Agent con đang ở trạng thái NGHỈ (Idle) để tiết kiệm token. Bạn có thể trò chuyện với tôi hoặc gửi một yêu cầu dự án (chứa các từ khóa như 'dự án', 'xây dựng', 'MVP', v.v.) để kích hoạt toàn bộ Web-Team hoạt động nhé!"
         else:
             try:
-                from google import genai
-                client = genai.Client()
+                from openai import OpenAI
+                api_key = os.environ.get("GEMINI_API_KEY")
+                if not api_key:
+                    raise ValueError("Missing GEMINI_API_KEY (9Router API Key)")
+                client = OpenAI(base_url="https://api.9router.com/v1", api_key=api_key)
                 system_prompt = "Bạn là Agent Chính (AG2.0), trợ lý AI điều phối chính của hệ thống MTA. Hãy trò chuyện thân thiện, chuyên nghiệp hoàn toàn bằng tiếng Việt. Nếu người dùng đưa ra yêu cầu dự án, hãy khuyên họ nhập chi tiết để bạn chuyển tiếp cho PM Agent."
-                resp = client.models.generate_content(
+                resp = client.chat.completions.create(
                     model="gemini-2.5-pro",
-                    contents=f"System Prompt:\n{system_prompt}\n\nUser Chat:\n{text}"
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": text}
+                    ],
+                    temperature=0.4
                 )
-                reply = resp.text
+                reply = resp.choices[0].message.content
             except Exception as e:
-                reply = f"Lỗi kết nối Gemini API (Live Mode): {e}. Hãy kiểm tra GEMINI_API_KEY hoặc thử lại với Mock Mode."
+                reply = f"Lỗi kết nối 9Router API (Live Mode): {e}. Hãy kiểm tra GEMINI_API_KEY hoặc thử lại với Mock Mode."
         registry.add_agent_message("main-agent", "agent", reply, "chat")
         registry.set_agent_state("main-agent", AgentState.IDLE)
         return
@@ -205,16 +212,24 @@ def process_chat(agent_id: str, text: str):
             # Get agent system prompt
             prompt_path = SUBAGENTS_DIR / f"{agent_id}.md"
             prompt = prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else "Bạn là một AI Agent trong hệ thống Multi-Agent."
-            from google import genai
-            client = genai.Client()
+            from openai import OpenAI
+            api_key = os.environ.get("GEMINI_API_KEY")
+            if not api_key:
+                raise ValueError("Missing GEMINI_API_KEY (9Router API Key)")
+            client = OpenAI(base_url="https://api.9router.com/v1", api_key=api_key)
             model_name = registry.agents[agent_id].model
-            resp = client.models.generate_content(
-                model=model_name,
-                contents=f"System Prompt:\n{prompt}\n\nUser Chat:\n{text}\n\nHãy phản hồi ngắn gọn bằng tiếng Việt theo đúng vai trò và nhiệm vụ của bạn."
+            actual_model = model_name.replace("9router/", "") if model_name.startswith("9router/") else model_name
+            resp = client.chat.completions.create(
+                model=actual_model,
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": text + "\n\nHãy phản hồi ngắn gọn bằng tiếng Việt theo đúng vai trò và nhiệm vụ của bạn."}
+                ],
+                temperature=0.3
             )
-            reply = resp.text
+            reply = resp.choices[0].message.content
         except Exception as e:
-            reply = f"Lỗi kết nối Gemini API cho {agent_id} (Live Mode): {e}."
+            reply = f"Lỗi kết nối 9Router API cho {agent_id} (Live Mode): {e}."
             
     registry.add_agent_message(agent_id, "agent", reply, "chat")
     registry.set_agent_state(agent_id, AgentState.IDLE)
@@ -565,7 +580,7 @@ body {
     <input type="text" id="project-input" placeholder="Project name" value="web-project" style="max-width:150px" />
     <select id="mode-select" class="btn" style="background: var(--surface2); color: var(--text); border: 1px solid var(--border); outline: none; padding: 8px 12px; border-radius: 8px; font-weight: 500; cursor: pointer;">
         <option value="mock" selected>🤖 Mock Mode (Simulation)</option>
-        <option value="live">⚡ Live Mode (Gemini API)</option>
+        <option value="live">&#9889; Live Mode (9Router API)</option>
     </select>
     <button class="btn btn-primary" onclick="startPipeline()">&#9654; Run Pipeline</button>
 </div>
@@ -577,12 +592,12 @@ body {
     </div>
     <div class="chat-panel">
         <div class="chat-header" id="chat-header">
-            <div class="agent-avatar" id="chat-avatar">PM</div>
+            <div class="agent-avatar" id="chat-avatar">AC</div>
             <div class="info">
-                <h3 id="chat-agent-name">PM Agent</h3>
-                <p id="chat-agent-role">Orchestrator / Project Manager</p>
+                <h3 id="chat-agent-name">Agent Ch&#237;nh (AG2.0)</h3>
+                <p id="chat-agent-role">Primary AI Assistant &amp; Coordinator | 9router/gemini-2.5-pro</p>
             </div>
-            <span id="chat-permission" class="permission-badge safe">&#128274; Full Access</span>
+            <span id="chat-permission" class="permission-badge safe">&#128275; Full Access</span>
         </div>
         <div class="messages" id="messages"></div>
         <div class="chat-input-bar">

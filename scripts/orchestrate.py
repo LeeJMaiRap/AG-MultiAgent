@@ -141,13 +141,13 @@ class OrchestratorRegistry:
 
     def _register_default_agents(self):
         defaults = [
-            ("main-agent", "Agent Chính (AG2.0)", "Primary AI Assistant & Coordinator", "gemini-2.5-pro"),
-            ("pm-orchestrator", "PM Agent", "Orchestrator / Project Manager", "gemini-2.5-pro"),
-            ("product-agent", "Product Agent", "Requirements & PRD", "gemini-2.5-flash"),
-            ("architecture-agent", "Architecture Agent", "System Design & API", "gemini-2.5-flash"),
-            ("frontend-agent", "Frontend Agent", "UI / Frontend Code", "gemini-2.5-flash"),
-            ("backend-agent", "Backend Agent", "Backend Logic", "gemini-2.5-flash"),
-            ("qa-agent", "QA Agent", "Testing & Quality", "gemini-2.5-flash"),
+            ("main-agent", "Agent Chính (AG2.0)", "Primary AI Assistant & Coordinator", "9router/gemini-2.5-pro"),
+            ("pm-orchestrator", "PM Agent", "Orchestrator / Project Manager", "9router/gemini-2.5-pro"),
+            ("product-agent", "Product Agent", "Requirements & PRD", "9router/gemini-2.5-flash"),
+            ("architecture-agent", "Architecture Agent", "System Design & API", "9router/gemini-2.5-flash"),
+            ("frontend-agent", "Frontend Agent", "UI / Frontend Code", "9router/gemini-2.5-flash"),
+            ("backend-agent", "Backend Agent", "Backend Logic", "9router/gemini-2.5-flash"),
+            ("qa-agent", "QA Agent", "Testing & Quality", "9router/gemini-2.5-flash"),
         ]
         for aid, name, role, model in defaults:
             self.agents[aid] = AgentInfo(aid, name, role, model)
@@ -275,18 +275,23 @@ def _mock_output(agent_name: str, task_desc: str) -> str:
 
 
 def _real_output(agent_name, task_desc, prompt, model_name, tools):
-    from google import genai
-    from google.genai import types
+    from openai import OpenAI
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        raise ValueError("Missing GEMINI_API_KEY")
-    client = genai.Client()
-    config = None
-    if tools:
-        config = types.GenerateContentConfig(tools=tools, temperature=0.2)
-    contents = f"System Prompt:\n{prompt}\n\nTask:\n{task_desc}"
-    resp = client.models.generate_content(model=model_name, contents=contents, config=config)
-    return resp.text
+        raise ValueError("Missing GEMINI_API_KEY (9Router API Key)")
+    # Strip 9router/ prefix for the API call model id
+    actual_model = model_name.replace("9router/", "") if model_name.startswith("9router/") else model_name
+    client = OpenAI(base_url="https://api.9router.com/v1", api_key=api_key)
+    messages = [
+        {"role": "system", "content": prompt},
+        {"role": "user", "content": task_desc}
+    ]
+    resp = client.chat.completions.create(
+        model=actual_model,
+        messages=messages,
+        temperature=0.2
+    )
+    return resp.choices[0].message.content
 
 
 def _output_file_for(agent_name: str) -> Optional[str]:
@@ -349,7 +354,7 @@ def run_pipeline(brief: str, project_name: str = "my-new-project", mock: bool = 
     ]
     pm_ctx = f"Project: {project_name}\nBrief: {brief}\nQA: {res_qa['content']}"
     res_pm = run_agent("pm-orchestrator", pm_ctx, mock=mock,
-                       model_name="gemini-2.5-pro", tools=pm_tools)
+                       model_name="gemini-2.5-pro")
 
     summary = res_pm["content"] if not mock else (
         f"# PM Project Summary\n\n- Project: {project_name}\n- Status: Completed\n"
