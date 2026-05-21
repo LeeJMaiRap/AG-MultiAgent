@@ -284,9 +284,12 @@ def _real_output(agent_name, task_desc, prompt, model_name, tools):
     print(f"[Codex Custom HTTP DEBUG] Agent: {agent_name} | Target Model: {actual_model} | URL: {url}")
     
     headers = {
-        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Authorization": f"Bearer {api_key}",
+        "api-key": api_key,
+        "X-API-Key": api_key,
+        "api_key": api_key
     }
     
     payload = {

@@ -181,9 +181,12 @@ def process_chat(agent_id: str, text: str):
                 print(f"[Codex Custom HTTP DEBUG] Agent: main-agent | Model: {actual_model} | URL: {url}")
                 
                 headers = {
-                    "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Authorization": f"Bearer {api_key}",
+                    "api-key": api_key,
+                    "X-API-Key": api_key,
+                    "api_key": api_key
                 }
                 system_prompt = "Bạn là Agent Chính (AG2.0), trợ lý AI điều phối chính của hệ thống MTA. Hãy trò chuyện thân thiện, chuyên nghiệp hoàn toàn bằng tiếng Việt. Nếu người dùng đưa ra yêu cầu dự án, hãy khuyên họ nhập chi tiết để bạn chuyển tiếp cho PM Agent."
                 
@@ -247,9 +250,12 @@ def process_chat(agent_id: str, text: str):
             print(f"[Codex Custom HTTP DEBUG] Agent: {agent_id} | Model: {actual_model} | URL: {url}")
             
             headers = {
-                "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Authorization": f"Bearer {api_key}",
+                "api-key": api_key,
+                "X-API-Key": api_key,
+                "api_key": api_key
             }
             
             payload = {
