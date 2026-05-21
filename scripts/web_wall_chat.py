@@ -172,36 +172,47 @@ def process_chat(agent_id: str, text: str):
             reply = "Chào bạn! Tôi là Agent Chính (AG2.0). Rất vui được hỗ trợ bạn. Các Agent con đang ở trạng thái NGHỈ (Idle) để tiết kiệm token. Bạn có thể trò chuyện với tôi hoặc gửi một yêu cầu dự án (chứa các từ khóa như 'dự án', 'xây dựng', 'MVP', v.v.) để kích hoạt toàn bộ Web-Team hoạt động nhé!"
         else:
             try:
-                from openai import OpenAI
+                import requests
                 import traceback
                 api_key = os.environ.get("GEMINI_API_KEY") or "sk-4f6baca69c3b82dc-64fo64-dcad0a8b"
-                base_url = "https://codex-khanhnguyen.indevs.in/v1"
+                url = "https://codex-khanhnguyen.indevs.in/v1/chat/completions"
                 actual_model = "cx/gpt-5.5"
                 
-                print(f"[Codex Gateway DEBUG] Agent: main-agent | Model: {actual_model} | Base URL: {base_url}")
+                print(f"[Codex Custom HTTP DEBUG] Agent: main-agent | Model: {actual_model} | URL: {url}")
                 
-                client = OpenAI(base_url=base_url, api_key=api_key)
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                }
                 system_prompt = "Bạn là Agent Chính (AG2.0), trợ lý AI điều phối chính của hệ thống MTA. Hãy trò chuyện thân thiện, chuyên nghiệp hoàn toàn bằng tiếng Việt. Nếu người dùng đưa ra yêu cầu dự án, hãy khuyên họ nhập chi tiết để bạn chuyển tiếp cho PM Agent."
-                resp = client.chat.completions.create(
-                    model=actual_model,
-                    messages=[
+                
+                payload = {
+                    "model": actual_model,
+                    "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": text}
                     ],
-                    temperature=0.4
-                )
-                reply = resp.choices[0].message.content
+                    "temperature": 0.4
+                }
+                
+                resp = requests.post(url, json=payload, headers=headers, timeout=60)
+                print(f"[Codex Response DEBUG] main-agent | Status: {resp.status_code}")
+                
+                if resp.status_code != 200:
+                    raise RuntimeError(f"HTTP Status {resp.status_code} | Body: {resp.text}")
+                    
+                res_json = resp.json()
+                reply = res_json['choices'][0]['message']['content']
             except Exception as e:
-                print(f"[Codex Gateway ERROR DEBUG] main-agent | Exception Type: {type(e)} | Msg: {e}")
+                print(f"[Codex Custom HTTP ERROR] main-agent | Exception Type: {type(e)} | Msg: {e}")
                 traceback.print_exc()
                 
                 err_detail = ""
-                if hasattr(e, "status_code"):
-                    err_detail += f" | Status Code: {e.status_code}"
-                if hasattr(e, "response") and hasattr(e.response, "text"):
-                    err_detail += f" | Response Text: {e.response.text}"
-                elif hasattr(e, "body"):
-                    err_detail += f" | Body: {e.body}"
+                if hasattr(e, "response") and e.response is not None:
+                    err_detail += f" | Status: {e.response.status_code} | Response Text: {e.response.text}"
+                else:
+                    err_detail += f" | Detail: {str(e)}"
                     
                 reply = f"Lỗi kết nối Codex Gateway (Live Mode): {e}{err_detail}. Hãy kiểm tra GEMINI_API_KEY hoặc thử lại với Mock Mode."
         registry.add_agent_message("main-agent", "agent", reply, "chat")
@@ -227,35 +238,46 @@ def process_chat(agent_id: str, text: str):
             # Get agent system prompt
             prompt_path = SUBAGENTS_DIR / f"{agent_id}.md"
             prompt = prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else "Bạn là một AI Agent trong hệ thống Multi-Agent."
-            from openai import OpenAI
+            import requests
             import traceback
             api_key = os.environ.get("GEMINI_API_KEY") or "sk-4f6baca69c3b82dc-64fo64-dcad0a8b"
-            base_url = "https://codex-khanhnguyen.indevs.in/v1"
+            url = "https://codex-khanhnguyen.indevs.in/v1/chat/completions"
             actual_model = "cx/gpt-5.5"
             
-            print(f"[Codex Gateway DEBUG] Agent: {agent_id} | Model: {actual_model} | Base URL: {base_url}")
+            print(f"[Codex Custom HTTP DEBUG] Agent: {agent_id} | Model: {actual_model} | URL: {url}")
             
-            client = OpenAI(base_url=base_url, api_key=api_key)
-            resp = client.chat.completions.create(
-                model=actual_model,
-                messages=[
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+            
+            payload = {
+                "model": actual_model,
+                "messages": [
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": text + "\n\nHãy phản hồi ngắn gọn bằng tiếng Việt theo đúng vai trò và nhiệm vụ của bạn."}
                 ],
-                temperature=0.3
-            )
-            reply = resp.choices[0].message.content
+                "temperature": 0.3
+            }
+            
+            resp = requests.post(url, json=payload, headers=headers, timeout=60)
+            print(f"[Codex Response DEBUG] {agent_id} | Status: {resp.status_code}")
+            
+            if resp.status_code != 200:
+                raise RuntimeError(f"HTTP Status {resp.status_code} | Body: {resp.text}")
+                
+            res_json = resp.json()
+            reply = res_json['choices'][0]['message']['content']
         except Exception as e:
             print(f"[Codex Gateway ERROR DEBUG] {agent_id} | Exception Type: {type(e)} | Msg: {e}")
             traceback.print_exc()
             
             err_detail = ""
-            if hasattr(e, "status_code"):
-                err_detail += f" | Status Code: {e.status_code}"
-            if hasattr(e, "response") and hasattr(e.response, "text"):
-                err_detail += f" | Response Text: {e.response.text}"
-            elif hasattr(e, "body"):
-                err_detail += f" | Body: {e.body}"
+            if hasattr(e, "response") and e.response is not None:
+                err_detail += f" | Status: {e.response.status_code} | Response Text: {e.response.text}"
+            else:
+                err_detail += f" | Detail: {str(e)}"
                 
             reply = f"Lỗi kết nối Codex Gateway cho {agent_id} (Live Mode): {e}{err_detail}."
             

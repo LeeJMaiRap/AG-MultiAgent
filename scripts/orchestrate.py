@@ -275,39 +275,51 @@ def _mock_output(agent_name: str, task_desc: str) -> str:
 
 
 def _real_output(agent_name, task_desc, prompt, model_name, tools):
-    from openai import OpenAI
+    import requests
     import traceback
     api_key = os.environ.get("GEMINI_API_KEY") or "sk-4f6baca69c3b82dc-64fo64-dcad0a8b"
-    base_url = "https://codex-khanhnguyen.indevs.in/v1"
+    url = "https://codex-khanhnguyen.indevs.in/v1/chat/completions"
     actual_model = "cx/gpt-5.5"
     
-    print(f"[Codex Gateway DEBUG] Agent: {agent_name} | Target Model: {actual_model} | Base URL: {base_url}")
+    print(f"[Codex Custom HTTP DEBUG] Agent: {agent_name} | Target Model: {actual_model} | URL: {url}")
     
-    try:
-        client = OpenAI(base_url=base_url, api_key=api_key)
-        messages = [
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    
+    payload = {
+        "model": actual_model,
+        "messages": [
             {"role": "system", "content": prompt},
             {"role": "user", "content": task_desc}
-        ]
-        resp = client.chat.completions.create(
-            model=actual_model,
-            messages=messages,
-            temperature=0.2
-        )
-        return resp.choices[0].message.content
+        ],
+        "temperature": 0.2
+    }
+    
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=60)
+        
+        # Log response status
+        print(f"[Codex Response DEBUG] Status: {resp.status_code}")
+        
+        if resp.status_code != 200:
+            raise RuntimeError(f"HTTP Status {resp.status_code} | Body: {resp.text}")
+            
+        res_json = resp.json()
+        return res_json['choices'][0]['message']['content']
     except Exception as e:
-        print(f"[Codex Gateway ERROR DEBUG] Model: {actual_model} | Exception Type: {type(e)} | Msg: {e}")
+        print(f"[Codex Custom HTTP ERROR] Model: {actual_model} | Exception Type: {type(e)} | Msg: {e}")
         traceback.print_exc()
         
         err_detail = ""
-        if hasattr(e, "status_code"):
-            err_detail += f" | Status Code: {e.status_code}"
-        if hasattr(e, "response") and hasattr(e.response, "text"):
-            err_detail += f" | Response Text: {e.response.text}"
-        elif hasattr(e, "body"):
-            err_detail += f" | Body: {e.body}"
+        if hasattr(e, "response") and e.response is not None:
+            err_detail += f" | Status: {e.response.status_code} | Response: {e.response.text}"
+        else:
+            err_detail += f" | Detail: {str(e)}"
             
-        raise RuntimeError(f"Codex Gateway API Error: {e}{err_detail}")
+        raise RuntimeError(f"Codex Custom HTTP Error: {e}{err_detail}")
 
 
 def _output_file_for(agent_name: str) -> Optional[str]:
