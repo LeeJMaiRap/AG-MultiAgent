@@ -268,7 +268,7 @@ def process_chat(agent_id: str, text: str):
     if not check_permission(agent_id, text):
         registry.add_agent_message(
             agent_id, "system", 
-            "Quyền hạn bị từ chối: Lệnh hệ thống (/) và các lệnh can thiệp OS bị chặn đối với Sub-agents. Chỉ Agent Chính mới có quyền này.", 
+            "Quyền hạn bị từ chối: Lệnh hệ thống (/) và các lệnh can thiệp OS bị chặn đối với Sub-agents. Chỉ Agent Chính và PM Agent mới có quyền này.", 
             "error"
         )
         return
@@ -894,7 +894,7 @@ function selectAgent(id) {
     document.getElementById('chat-agent-name').textContent = a.display_name;
     document.getElementById('chat-agent-role').textContent = a.role + ' | ' + a.model;
     const perm = document.getElementById('chat-permission');
-    if (id === 'main-agent') {
+    if (a.privileged) {
         perm.className = 'permission-badge safe';
         perm.innerHTML = '&#128275; Full Access';
     } else {

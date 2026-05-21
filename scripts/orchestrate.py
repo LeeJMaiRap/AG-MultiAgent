@@ -108,13 +108,16 @@ class AgentInfo:
             "state": self.state.value,
             "current_task": self.current_task,
             "last_updated": self.last_updated,
-            "message_count": len(self.messages)
+            "message_count": len(self.messages),
+            "privileged": self.agent_id in PRIVILEGED_AGENTS
         }
 
 
 # ---------------------------------------------------------------------------
 # Permission Barrier
 # ---------------------------------------------------------------------------
+
+PRIVILEGED_AGENTS = {"main-agent", "pm-orchestrator"}
 
 BLOCKED_PATTERNS = [
     "os.system", "subprocess.run", "subprocess.Popen", "subprocess.call",
@@ -125,13 +128,12 @@ BLOCKED_PATTERNS = [
 
 def check_permission(agent_id: str, content: str) -> bool:
     """
-    Enforce the permission barrier for all agents except the Main Agent.
-    Only main-agent (AG2.0) has full access to execute system commands
-    and slash commands. PM Agent and all sub-agents are restricted.
+    Enforce the permission barrier for all agents except the Main Agent and PM Agent.
+    Only main-agent (AG2.0) and pm-orchestrator (PM Agent) have full access to
+    execute system commands and slash commands. All other sub-agents are restricted.
     Returns True if the content is safe.
     """
-    privileged_agents = {"main-agent", "pm-orchestrator"}
-    if agent_id in privileged_agents:
+    if agent_id in PRIVILEGED_AGENTS:
         return True
     
     # Block slash system commands for sub-agents
