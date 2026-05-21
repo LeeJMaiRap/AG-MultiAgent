@@ -138,27 +138,38 @@ BLOCKED_PATTERNS = [
     "exec(", "eval(", "import os", "import subprocess", "import shutil",
     "shutil.rmtree", "os.remove", "os.rmdir", "os.rename",
     "Path.unlink", "Path.rmdir",
+    "rm -rf", "format", "del /s", "del /q", "shutdown", "erase"
 ]
 
 def check_permission(agent_id: str, content: str) -> bool:
     """
     Enforce the permission barrier for all agents except the Main Agent and PM Agent.
     Only main-agent (AG2.0) and pm-orchestrator (PM Agent) have full access to
-    execute system commands and slash commands. All other sub-agents are restricted.
+    execute system commands and slash commands.
+    Sub-agents are allowed to run environment setup commands: /npm, /pip, /python, /go, /cargo,
+    but blocked from dangerous commands and patterns.
     Returns True if the content is safe.
     """
     if agent_id in PRIVILEGED_AGENTS:
         return True
     
-    # Block slash system commands for sub-agents
     trimmed = content.strip()
-    if trimmed.startswith("/"):
-        return False
-        
+    
+    # Check for dangerous patterns first (for sub-agents)
     content_lower = content.lower()
     for pattern in BLOCKED_PATTERNS:
         if pattern.lower() in content_lower:
             return False
+            
+    # Sub-agents are restricted on slash commands
+    if trimmed.startswith("/"):
+        # Allow safe setup commands
+        allowed_prefixes = ("/npm", "/pip", "/python", "/go", "/cargo")
+        parts = trimmed.split()
+        if parts and parts[0] in allowed_prefixes:
+            return True
+        return False
+        
     return True
 
 
@@ -188,6 +199,8 @@ class OrchestratorRegistry:
         self.agents: Dict[str, AgentInfo] = {}
         self._listeners: List[Callable] = []
         self.current_project = "web-project"
+        self.current_brief = ""
+        self.mock_mode = True
         self._register_default_agents()
 
     def _register_default_agents(self):
@@ -713,12 +726,17 @@ def run_agent_with_fallback(agent_name: str, task_desc: str, mock: bool = True, 
 
 
 def run_pipeline(brief: str, project_name: str = "my-new-project", mock: bool = True) -> dict:
-    """Execute the full multi-agent pipeline with state tracking and robust fallbacks."""
+    """Execute the initial Planning phase of the pipeline. Wait for user scope approval."""
     project_dir = PROJECTS_DIR / project_name
     for sub in ["01-initiation", "02-planning", "03-execution", "04-monitoring", "05-closure"]:
         (project_dir / sub).mkdir(parents=True, exist_ok=True)
 
     registry.idle_all()
+    
+    # Save parameters to registry for subsequent Waves execution
+    registry.current_brief = brief
+    registry.current_project = project_name
+    registry.mock_mode = mock
 
     # PM starts planning
     registry.set_agent_state("pm-orchestrator", AgentState.PLANNING, brief[:120])
@@ -729,9 +747,31 @@ def run_pipeline(brief: str, project_name: str = "my-new-project", mock: bool = 
     res_pm_plan = run_agent_with_fallback("pm-orchestrator", pm_plan_prompt, mock=mock, context=f"Brief: {brief}")
     (project_dir / "01-initiation" / "pm_plan.md").write_text(res_pm_plan["content"], encoding="utf-8")
 
+    # Check if PM Agent output contains [SCOPE_APPROVED] right away.
+    # If yes, trigger the waves. If not, wait for user interaction in Chat.
+    if "[SCOPE_APPROVED]" in res_pm_plan["content"]:
+        registry.add_agent_message("pm-orchestrator", "system", "Phát hiện [SCOPE_APPROVED] trong kế hoạch ban đầu. Tự động kích hoạt Waves tiếp theo...", "info")
+        def _run_waves():
+            execute_pipeline_waves(brief, project_name, mock, res_pm_plan["content"])
+        thread = threading.Thread(target=_run_waves, daemon=True)
+        thread.start()
+    else:
+        registry.add_agent_message("pm-orchestrator", "system", "Đang dừng ở pha Planning. Vui lòng thảo luận với PM Agent để duyệt kế hoạch (chốt scope). Khi chốt scope, PM Agent sẽ tự động chuyển sang pha Execution.", "info")
+        registry.set_agent_state("pm-orchestrator", AgentState.IDLE)
+        
+    return {"status": "planning_started", "project_dir": str(project_dir)}
+
+
+def execute_pipeline_waves(brief: str, project_name: str = "my-new-project", mock: bool = True, pm_plan_content: str = "") -> dict:
+    """Execute the remaining waves (PRD, Architecture, FE/BE, QA) after scope approval."""
+    project_dir = PROJECTS_DIR / project_name
+    
+    registry.add_agent_message("pm-orchestrator", "system", "🔒 **[Scope Locked]** Kế hoạch đã được duyệt. Đang chuyển sang pha thực thi (Execution)...", "info")
+
     # Wave 1 - Sequential
-    # Context 1: Product Agent gets user brief
-    res_prod = run_agent_with_fallback("product-agent", brief, mock=mock, context=f"User Brief: {brief}")
+    # Context 1: Product Agent gets user brief + PM Plan
+    prod_task = f"User Brief: {brief}\n\nPM Plan:\n{pm_plan_content}"
+    res_prod = run_agent_with_fallback("product-agent", prod_task, mock=mock, context=f"User Brief: {brief}\n\nPM Plan:\n{pm_plan_content}")
     _write_output(project_dir, res_prod)
 
     # Context 2: Architecture Agent gets User Brief + PRD
@@ -772,6 +812,7 @@ def run_pipeline(brief: str, project_name: str = "my-new-project", mock: bool = 
     pm_ctx = f"Project: {project_name}\nBrief: {brief}\nQA: {res_qa['content']}"
     pm_fallback_context = f"Brief: {brief}\n\nPRD:\n{res_prod['content']}\n\nSpec:\n{res_arch['content']}\n\nFE:\n{res_fe['content']}\n\nBE:\n{res_be['content']}\n\nQA:\n{res_qa['content']}"
     
+    registry.set_agent_state("pm-orchestrator", AgentState.WORKING, "Generating final project report")
     res_pm = run_agent_with_fallback("pm-orchestrator", pm_ctx, mock=mock, context=pm_fallback_context)
 
     summary = res_pm["content"] if not mock else (
@@ -783,7 +824,7 @@ def run_pipeline(brief: str, project_name: str = "my-new-project", mock: bool = 
         registry.add_agent_message("pm-orchestrator", "agent", summary, "output")
 
     registry.set_agent_state("pm-orchestrator", AgentState.DONE)
-    registry.add_agent_message("pm-orchestrator", "system", "Project pipeline completed.", "info")
+    registry.add_agent_message("pm-orchestrator", "system", "🎉 Project pipeline completed successfully.", "info")
 
     return {"status": "done", "project_dir": str(project_dir)}
 

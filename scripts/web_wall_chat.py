@@ -333,9 +333,22 @@ def generate_streaming_chat(agent_id: str, system_prompt: str, user_text: str, t
     }
     
     messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_text}
+        {"role": "system", "content": system_prompt}
     ]
+    
+    # Load all historical messages for this agent to prevent context loss
+    if agent_id in registry.agents:
+        for m in registry.agents[agent_id].messages:
+            if m["role"] == "user":
+                messages.append({"role": "user", "content": m["text"]})
+            elif m["role"] == "agent":
+                if m.get("stream") is True:
+                    continue
+                messages.append({"role": "assistant", "content": m["text"]})
+                
+    # Ensure the current user message is appended if not already present
+    if not messages or messages[-1]["role"] != "user" or messages[-1]["content"] != user_text:
+        messages.append({"role": "user", "content": user_text})
     
     # Reset cancellation state
     if agent_id in registry.agents:
@@ -460,7 +473,7 @@ def process_chat(agent_id: str, text: str):
     if not check_permission(agent_id, text):
         registry.add_agent_message(
             agent_id, "system", 
-            "Quyền hạn bị từ chối: Lệnh hệ thống (/) và các lệnh can thiệp OS bị chặn đối với Sub-agents. Chỉ Agent Chính và PM Agent mới có quyền này.", 
+            "Quyền hạn bị từ chối: Chỉ các lệnh môi trường (/npm, /pip, /python, /go, /cargo) được cho phép đối với Sub-agents. Các lệnh hệ thống khác bị chặn.", 
             "error"
         )
         return
@@ -557,6 +570,7 @@ def process_chat(agent_id: str, text: str):
     # 3. PM Agent & Sub-agents flow
     registry.set_agent_state(agent_id, AgentState.WORKING)
     
+    reply = ""
     if GLOBAL_MOCK:
         time.sleep(0.8)
         mock_responses = {
@@ -568,6 +582,13 @@ def process_chat(agent_id: str, text: str):
             "qa-agent": "Tôi là QA Agent. Tôi tự động thiết lập bộ test case, chạy thử nghiệm hệ thống và rà soát lỗi bảo mật trước khi bàn giao dự án."
         }
         reply = mock_responses.get(agent_id, f"Tôi là {registry.agents[agent_id].display_name}. Rất vui được nhận tin nhắn từ bạn!")
+        
+        # Simulate scope approval in Mock Mode if user gives positive feedback
+        if agent_id == "pm-orchestrator":
+            text_lower = text.lower()
+            if any(kw in text_lower for kw in ["chốt", "đồng ý", "ok", "duyệt", "tiến hành đi", "bắt đầu đi", "let's go", "approve", "go ahead"]):
+                reply += "\n\n[SCOPE_APPROVED] Tuyệt vời! Kế hoạch đã được phê duyệt. Tôi sẽ kích hoạt pha thực thi cho dự án ngay lập tức."
+                
         registry.add_agent_message(agent_id, "agent", reply, "chat")
     else:
         try:
@@ -575,12 +596,27 @@ def process_chat(agent_id: str, text: str):
             prompt_path = SUBAGENTS_DIR / f"{agent_id}.md"
             prompt = prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else "Bạn là một AI Agent trong hệ thống Multi-Agent."
             system_prompt = prompt + "\n\nHãy phản hồi ngắn gọn bằng tiếng Việt theo đúng vai trò và nhiệm vụ của bạn."
-            generate_streaming_chat(agent_id, system_prompt, text, temperature=0.3)
+            reply = generate_streaming_chat(agent_id, system_prompt, text, temperature=0.3)
         except Exception as e:
             reply = f"Lỗi kết nối Codex Gateway cho {agent_id} (Live Mode): {e}."
             registry.add_agent_message(agent_id, "agent", reply, "chat")
             
     registry.set_agent_state(agent_id, AgentState.IDLE)
+    
+    # Human-in-the-loop Pipeline release gateway
+    if agent_id == "pm-orchestrator" and "[SCOPE_APPROVED]" in reply:
+        from orchestrate import execute_pipeline_waves
+        brief = getattr(registry, "current_brief", "") or "Web Project"
+        project_name = registry.current_project
+        mock = GLOBAL_MOCK
+        
+        registry.add_agent_message("pm-orchestrator", "system", "Tín hiệu [SCOPE_APPROVED] được phát hiện. Đang chuẩn bị chạy các waves thực thi tiếp theo...", "info")
+        
+        def _run_waves():
+            execute_pipeline_waves(brief, project_name, mock, reply)
+            
+        thread = threading.Thread(target=_run_waves, daemon=True)
+        thread.start()
 
 def process_chat_in_thread(agent_id: str, text: str):
     thread = threading.Thread(target=process_chat, args=(agent_id, text), daemon=True)
@@ -1431,8 +1467,8 @@ function selectAgent(id) {
         perm.className = 'permission-badge safe';
         perm.innerHTML = '&#128275; Full Access';
     } else {
-        perm.className = 'permission-badge';
-        perm.innerHTML = '&#128274; Restricted (no system commands)';
+        perm.className = 'permission-badge safe';
+        perm.innerHTML = '🟢 Env Access (npm/pip allowed)';
     }
     
     document.getElementById('messages').innerHTML = ''; // clear for new agent
@@ -1462,25 +1498,43 @@ function renderMessages() {
         const existingIds = new Set();
         Array.from(container.children).forEach(child => existingIds.add(child.id));
         
+        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 120;
+        
         msgs.forEach((m, i) => {
             const msgId = `msg-${activeAgent}-${i}`;
             const cls = m.type === 'error' ? 'error' : m.role;
             const time = m.ts ? new Date(m.ts).toLocaleTimeString() : '';
-            const htmlContent = (typeof marked !== 'undefined') ? marked.parse(m.text || '') : escapeHtml(m.text || '');
             
             let node = document.getElementById(msgId);
             if (!node) {
                 node = document.createElement('div');
                 node.id = msgId;
                 node.className = `msg ${cls}`;
+                
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'msg-content';
+                node.appendChild(contentDiv);
+                
+                const metaDiv = document.createElement('div');
+                metaDiv.className = 'meta';
+                node.appendChild(metaDiv);
+                
                 container.appendChild(node);
             }
             
-            const innerHTML = `${htmlContent}<div class="meta">${m.role} &middot; ${time}</div>`;
+            const contentDiv = node.querySelector('.msg-content');
+            const metaDiv = node.querySelector('.meta');
             
-            if (node.innerHTML !== innerHTML) {
-                node.innerHTML = innerHTML;
+            const htmlContent = (typeof marked !== 'undefined') ? marked.parse(m.text || '') : escapeHtml(m.text || '');
+            if (contentDiv.innerHTML !== htmlContent) {
+                contentDiv.innerHTML = htmlContent;
             }
+            
+            const metaText = `${m.role} &middot; ${time}`;
+            if (metaDiv.innerHTML !== metaText) {
+                metaDiv.innerHTML = metaText;
+            }
+            
             existingIds.delete(msgId);
         });
         
@@ -1489,8 +1543,10 @@ function renderMessages() {
             if (n) n.remove();
         });
         
-        // Auto-scroll only if we are at bottom or new message arrived
-        container.scrollTop = container.scrollHeight;
+        // Auto-scroll only if near bottom or if the last message is from user
+        if (isNearBottom || (msgs.length > 0 && msgs[msgs.length - 1].role === 'user')) {
+            container.scrollTop = container.scrollHeight;
+        }
         checkQaBridge();
     });
 }
