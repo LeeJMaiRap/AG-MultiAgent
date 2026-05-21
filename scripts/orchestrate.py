@@ -276,22 +276,40 @@ def _mock_output(agent_name: str, task_desc: str) -> str:
 
 def _real_output(agent_name, task_desc, prompt, model_name, tools):
     from openai import OpenAI
+    import traceback
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("Missing GEMINI_API_KEY (9Router API Key)")
     # Strip 9router/ prefix for the API call model id
     actual_model = model_name.replace("9router/", "") if model_name.startswith("9router/") else model_name
-    client = OpenAI(base_url="https://api.9router.com/v1", api_key=api_key)
-    messages = [
-        {"role": "system", "content": prompt},
-        {"role": "user", "content": task_desc}
-    ]
-    resp = client.chat.completions.create(
-        model=actual_model,
-        messages=messages,
-        temperature=0.2
-    )
-    return resp.choices[0].message.content
+    
+    print(f"[9Router DEBUG] Agent: {agent_name} | Target Model: {actual_model} | Base URL: https://api.9router.com/v1")
+    
+    try:
+        client = OpenAI(base_url="https://api.9router.com/v1", api_key=api_key)
+        messages = [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": task_desc}
+        ]
+        resp = client.chat.completions.create(
+            model=actual_model,
+            messages=messages,
+            temperature=0.2
+        )
+        return resp.choices[0].message.content
+    except Exception as e:
+        print(f"[9Router ERROR DEBUG] Model: {actual_model} | Exception Type: {type(e)} | Msg: {e}")
+        traceback.print_exc()
+        
+        err_detail = ""
+        if hasattr(e, "status_code"):
+            err_detail += f" | Status Code: {e.status_code}"
+        if hasattr(e, "response") and hasattr(e.response, "text"):
+            err_detail += f" | Response Text: {e.response.text}"
+        elif hasattr(e, "body"):
+            err_detail += f" | Body: {e.body}"
+            
+        raise RuntimeError(f"9Router API Error: {e}{err_detail}")
 
 
 def _output_file_for(agent_name: str) -> Optional[str]:
