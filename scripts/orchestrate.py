@@ -91,11 +91,12 @@ BLOCKED_PATTERNS = [
 
 def check_permission(agent_id: str, content: str) -> bool:
     """
-    Enforce the permission barrier for sub-agents.
-    Sub-agents (non-PM, non-orchestrator, non-main-agent) are NOT allowed to execute
-    system commands or slash commands. Returns True if the content is safe.
+    Enforce the permission barrier for all agents except the Main Agent.
+    Only main-agent (AG2.0) has full access to execute system commands
+    and slash commands. PM Agent and all sub-agents are restricted.
+    Returns True if the content is safe.
     """
-    privileged_agents = {"pm-orchestrator", "main-agent"}
+    privileged_agents = {"main-agent"}
     if agent_id in privileged_agents:
         return True
     
