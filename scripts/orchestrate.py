@@ -1,10 +1,23 @@
 #!/usr/bin/env python3
+"""
+Antigravity 2.0 Multi-Agent Orchestrator (Windows Native)
+=========================================================
+Manages agent lifecycle states (IDLE, PLANNING, WORKING, DONE, ERROR),
+enforces permission barriers for sub-agents, and coordinates parallel
+execution using ThreadPoolExecutor.
+
+This module is importable by web_wall_chat.py for real-time orchestration.
+"""
 import os
 import sys
 import json
 import time
 import argparse
+import threading
 from pathlib import Path
+from datetime import datetime
+from enum import Enum
+from typing import Dict, List, Optional, Callable, Any
 import concurrent.futures
 
 # Import tools from tools_registry
@@ -14,6 +27,167 @@ import tools_registry
 BASE_DIR = Path(__file__).parent.parent.resolve()
 SUBAGENTS_DIR = BASE_DIR / "subagents"
 PROJECTS_DIR = BASE_DIR / "projects" / "active"
+
+# ---------------------------------------------------------------------------
+# Agent State Management
+# ---------------------------------------------------------------------------
+
+class AgentState(str, Enum):
+    IDLE = "IDLE"
+    PLANNING = "PLANNING"
+    WORKING = "WORKING"
+    DONE = "DONE"
+    ERROR = "ERROR"
+
+class AgentInfo:
+    """Tracks an individual agent's identity, state, and message log."""
+    def __init__(self, agent_id: str, display_name: str, role: str, model: str = "gemini-2.5-flash"):
+        self.agent_id = agent_id
+        self.display_name = display_name
+        self.role = role
+        self.model = model
+        self.state = AgentState.IDLE
+        self.messages: List[Dict[str, Any]] = []
+        self.current_task: Optional[str] = None
+        self.last_updated = datetime.now().isoformat()
+
+    def set_state(self, state: AgentState, task: Optional[str] = None):
+        self.state = state
+        if task is not None:
+            self.current_task = task
+        self.last_updated = datetime.now().isoformat()
+
+    def add_message(self, role: str, text: str, msg_type: str = "info"):
+        self.messages.append({
+            "ts": datetime.now().isoformat(),
+            "role": role,
+            "text": text,
+            "type": msg_type
+        })
+
+    def to_dict(self) -> dict:
+        return {
+            "agent_id": self.agent_id,
+            "display_name": self.display_name,
+            "role": self.role,
+            "model": self.model,
+            "state": self.state.value,
+            "current_task": self.current_task,
+            "last_updated": self.last_updated,
+            "message_count": len(self.messages)
+        }
+
+
+# ---------------------------------------------------------------------------
+# Permission Barrier
+# ---------------------------------------------------------------------------
+
+BLOCKED_PATTERNS = [
+    "os.system", "subprocess.run", "subprocess.Popen", "subprocess.call",
+    "exec(", "eval(", "import os", "import subprocess", "import shutil",
+    "shutil.rmtree", "os.remove", "os.rmdir", "os.rename",
+    "Path.unlink", "Path.rmdir",
+]
+
+def check_permission(agent_id: str, content: str) -> bool:
+    """
+    Enforce the permission barrier for sub-agents.
+    Sub-agents (non-PM, non-orchestrator) are NOT allowed to execute
+    system commands. Returns True if the content is safe.
+    """
+    privileged_agents = {"pm-orchestrator"}
+    if agent_id in privileged_agents:
+        return True
+    content_lower = content.lower()
+    for pattern in BLOCKED_PATTERNS:
+        if pattern.lower() in content_lower:
+            return False
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator Registry (singleton)
+# ---------------------------------------------------------------------------
+
+class OrchestratorRegistry:
+    """
+    Central registry that holds all agent definitions and provides
+    event callbacks so the Web UI can subscribe to state changes.
+    """
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+                cls._instance._initialized = False
+            return cls._instance
+
+    def __init__(self):
+        if self._initialized:
+            return
+        self._initialized = True
+        self.agents: Dict[str, AgentInfo] = {}
+        self._listeners: List[Callable] = []
+        self._register_default_agents()
+
+    def _register_default_agents(self):
+        defaults = [
+            ("pm-orchestrator", "PM Agent", "Orchestrator / Project Manager", "gemini-2.5-pro"),
+            ("product-agent", "Product Agent", "Requirements & PRD", "gemini-2.5-flash"),
+            ("architecture-agent", "Architecture Agent", "System Design & API", "gemini-2.5-flash"),
+            ("frontend-agent", "Frontend Agent", "UI / Frontend Code", "gemini-2.5-flash"),
+            ("backend-agent", "Backend Agent", "Backend Logic", "gemini-2.5-flash"),
+            ("qa-agent", "QA Agent", "Testing & Quality", "gemini-2.5-flash"),
+        ]
+        for aid, name, role, model in defaults:
+            self.agents[aid] = AgentInfo(aid, name, role, model)
+
+    def add_listener(self, callback: Callable):
+        self._listeners.append(callback)
+
+    def remove_listener(self, callback: Callable):
+        self._listeners = [l for l in self._listeners if l is not callback]
+
+    def _notify(self, event_type: str, data: dict):
+        for listener in self._listeners:
+            try:
+                listener(event_type, data)
+            except Exception:
+                pass
+
+    def set_agent_state(self, agent_id: str, state: AgentState, task: Optional[str] = None):
+        if agent_id not in self.agents:
+            return
+        self.agents[agent_id].set_state(state, task)
+        self._notify("state_change", {"agent_id": agent_id, "state": state.value, "task": task})
+
+    def add_agent_message(self, agent_id: str, role: str, text: str, msg_type: str = "info"):
+        if agent_id not in self.agents:
+            return
+        self.agents[agent_id].add_message(role, text, msg_type)
+        self._notify("message", {"agent_id": agent_id, "role": role, "text": text, "type": msg_type})
+
+    def get_all_states(self) -> List[dict]:
+        return [a.to_dict() for a in self.agents.values()]
+
+    def get_agent_messages(self, agent_id: str) -> List[dict]:
+        if agent_id not in self.agents:
+            return []
+        return self.agents[agent_id].messages
+
+    def idle_all(self):
+        for agent in self.agents.values():
+            agent.set_state(AgentState.IDLE)
+        self._notify("idle_all", {})
+
+
+# ---------------------------------------------------------------------------
+# Agent Execution (with state tracking)
+# ---------------------------------------------------------------------------
+
+registry = OrchestratorRegistry()
 
 class Colors:
     CYAN = '\033[96m'
@@ -29,101 +203,168 @@ def log(message, color=Colors.RESET):
 def load_prompt(agent_name):
     prompt_path = SUBAGENTS_DIR / f"{agent_name}.md"
     if not prompt_path.exists():
-        log(f"Lỗi: Không tìm thấy prompt của {agent_name} tại {prompt_path}", Colors.RED)
+        log(f"Error: prompt not found for {agent_name} at {prompt_path}", Colors.RED)
         return ""
     return prompt_path.read_text(encoding="utf-8")
 
-def run_agent_simulation(agent_name, task_desc, mock=True, model_name='gemini-2.5-flash', tools=None):
-    log(f"\n[Running Subagent: {agent_name.upper()} using {model_name}]...", Colors.CYAN)
+
+def run_agent(agent_name: str, task_desc: str, mock: bool = True,
+              model_name: str = 'gemini-2.5-flash', tools=None) -> dict:
+    """Run a single agent with full state-lifecycle tracking."""
+
+    # 1. Transition to WORKING
+    registry.set_agent_state(agent_name, AgentState.WORKING, task_desc[:120])
+    registry.add_agent_message(agent_name, "system", f"Starting task with model {model_name}", "status")
+    log(f"\n[Running: {agent_name.upper()} | model={model_name}]...", Colors.CYAN)
+
     prompt = load_prompt(agent_name)
-    
-    if mock:
-        time.sleep(1.5)  # Simulate latency
-        log(f"✓ {agent_name.upper()} đã nhận diện và phân tích yêu cầu (Simulated).", Colors.GREEN)
-        
-        if "product" in agent_name:
-            return {
-                "status": "success",
-                "output_file": "01-initiation/requirements.md",
-                "content": f"# PRD & Acceptance Criteria\n\n## Project Brief\n{task_desc}\n\n## Functional Requirements\n- FR-001: User can add tasks.\n- FR-002: User can list tasks.\n\n## Acceptance Criteria\n- AC-001: CLI command 'add' works.\n"
-            }
-        elif "architecture" in agent_name:
-            return {
-                "status": "success",
-                "output_file": "02-planning/spec.md",
-                "content": "# Architecture Spec & API Contract\n\n## Tech Stack\n- CLI: Python\n- Storage: JSON local file\n\n## API Contract\n- `add(task_name)` -> JSON response\n- `list()` -> List of tasks\n"
-            }
-        elif "frontend" in agent_name:
-            return {
-                "status": "success",
-                "output_file": "03-execution/frontend_view.py",
-                "content": "# Frontend CLI interface\nprint('=== CLI Task Manager ===')\n"
-            }
-        elif "backend" in agent_name:
-            return {
-                "status": "success",
-                "output_file": "03-execution/backend_logic.py",
-                "content": "# Backend JSON database logic\ndef save_task(name):\n    pass\n"
-            }
-        elif "qa" in agent_name:
-            return {
-                "status": "success",
-                "output_file": "03-execution/qa_test.py",
-                "content": "# QA Test Suite\ndef test_add_task():\n    assert True\n"
-            }
+
+    try:
+        if mock:
+            time.sleep(1.2)
+            content = _mock_output(agent_name, task_desc)
         else:
-            return {"status": "success", "content": "Complete"}
+            content = _real_output(agent_name, task_desc, prompt, model_name, tools)
+
+        # Permission check on generated content
+        if not check_permission(agent_name, content):
+            registry.set_agent_state(agent_name, AgentState.ERROR)
+            registry.add_agent_message(agent_name, "system",
+                                       "BLOCKED: Output contained forbidden system commands.", "error")
+            return {"status": "blocked", "content": "Permission denied."}
+
+        # 2. Transition to DONE
+        registry.set_agent_state(agent_name, AgentState.DONE)
+        registry.add_agent_message(agent_name, "agent", content[:500], "output")
+        log(f"OK {agent_name.upper()} finished.", Colors.GREEN)
+
+        output_file = _output_file_for(agent_name)
+        return {"status": "success", "output_file": output_file, "content": content}
+
+    except Exception as exc:
+        registry.set_agent_state(agent_name, AgentState.ERROR)
+        registry.add_agent_message(agent_name, "system", f"Error: {exc}", "error")
+        log(f"FAIL {agent_name}: {exc}", Colors.RED)
+        return {"status": "error", "content": str(exc)}
+
+
+def _mock_output(agent_name: str, task_desc: str) -> str:
+    if "product" in agent_name:
+        return (f"# PRD & Acceptance Criteria\n\n## Project Brief\n{task_desc}\n\n"
+                "## Functional Requirements\n- FR-001: Core feature.\n"
+                "## Acceptance Criteria\n- AC-001: Works as specified.\n")
+    elif "architecture" in agent_name:
+        return ("# Architecture Spec\n\n## Tech Stack\n- Runtime: Python\n- Storage: JSON\n"
+                "## API Contract\n- `create()` -> JSON\n- `list()` -> Array\n")
+    elif "frontend" in agent_name:
+        return "# Frontend View\nprint('=== UI Ready ===')\n"
+    elif "backend" in agent_name:
+        return "# Backend Logic\ndef handle(req): pass\n"
+    elif "qa" in agent_name:
+        return "# QA Tests\ndef test_main(): assert True\n"
     else:
-        try:
-            from google import genai
-            from google.genai import types
-            
-            api_key = os.environ.get("GEMINI_API_KEY")
-            if not api_key:
-                raise ValueError("Missing GEMINI_API_KEY environment variable.")
-                
-            client = genai.Client()
-            
-            # Configure native tools if provided
-            config = None
-            if tools:
-                config = types.GenerateContentConfig(
-                    tools=tools,
-                    temperature=0.2
-                )
-                
-            contents = f"System Prompt/Role Instructions:\n{prompt}\n\nInput Task Context:\n{task_desc}"
-            
-            response = client.models.generate_content(
-                model=model_name,
-                contents=contents,
-                config=config
-            )
-            
-            log(f"✓ {agent_name.upper()} completed successfully using Gemini API.", Colors.GREEN)
-            
-            # Extract standard file output pattern if generated in text
-            content = response.text
-            output_file = None
-            if "product" in agent_name:
-                output_file = "01-initiation/requirements.md"
-            elif "architecture" in agent_name:
-                output_file = "02-planning/spec.md"
-            elif "frontend" in agent_name:
-                output_file = "03-execution/frontend_view.py"
-            elif "backend" in agent_name:
-                output_file = "03-execution/backend_logic.py"
-            elif "qa" in agent_name:
-                output_file = "03-execution/qa_test.py"
-                
-            return {
-                "status": "success",
-                "output_file": output_file,
-                "content": content
-            }
-        except Exception as e:
-            log(f"Lưu ý: Không thể chạy Gemini SDK thực ({e}). Chuyển sang chế độ Mock Simulation.", Colors.YELLOW)
-            return run_agent_simulation(agent_name, task_desc, mock=True, model_name=model_name, tools=tools)
+        return "# Task completed successfully.\n"
+
+
+def _real_output(agent_name, task_desc, prompt, model_name, tools):
+    from google import genai
+    from google.genai import types
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("Missing GEMINI_API_KEY")
+    client = genai.Client()
+    config = None
+    if tools:
+        config = types.GenerateContentConfig(tools=tools, temperature=0.2)
+    contents = f"System Prompt:\n{prompt}\n\nTask:\n{task_desc}"
+    resp = client.models.generate_content(model=model_name, contents=contents, config=config)
+    return resp.text
+
+
+def _output_file_for(agent_name: str) -> Optional[str]:
+    mapping = {
+        "product-agent": "01-initiation/requirements.md",
+        "architecture-agent": "02-planning/spec.md",
+        "frontend-agent": "03-execution/frontend_view.py",
+        "backend-agent": "03-execution/backend_logic.py",
+        "qa-agent": "03-execution/qa_test.py",
+    }
+    return mapping.get(agent_name)
+
+
+# ---------------------------------------------------------------------------
+# Full Orchestration Pipeline
+# ---------------------------------------------------------------------------
+
+def run_pipeline(brief: str, project_name: str = "my-new-project", mock: bool = True) -> dict:
+    """Execute the full multi-agent pipeline with state tracking."""
+    project_dir = PROJECTS_DIR / project_name
+    for sub in ["01-initiation", "02-planning", "03-execution", "04-monitoring", "05-closure"]:
+        (project_dir / sub).mkdir(parents=True, exist_ok=True)
+
+    registry.idle_all()
+
+    # PM starts planning
+    registry.set_agent_state("pm-orchestrator", AgentState.PLANNING, brief[:120])
+    registry.add_agent_message("pm-orchestrator", "system", f"Received project brief: {brief}", "info")
+
+    # Wave 1 - Sequential
+    res_prod = run_agent("product-agent", brief, mock=mock)
+    _write_output(project_dir, res_prod)
+
+    res_arch = run_agent("architecture-agent",
+                         f"PRD:\n{res_prod['content']}", mock=mock)
+    _write_output(project_dir, res_arch)
+
+    # Wave 2 - Parallel (Frontend + Backend)
+    registry.add_agent_message("pm-orchestrator", "system", "Wave 2: Launching FE + BE in parallel", "info")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        ctx = f"PRD: {res_prod['content']}\nSpec: {res_arch['content']}"
+        fe_fut = pool.submit(run_agent, "frontend-agent", ctx, mock)
+        be_fut = pool.submit(run_agent, "backend-agent", ctx, mock)
+        res_fe = fe_fut.result()
+        res_be = be_fut.result()
+    _write_output(project_dir, res_fe)
+    _write_output(project_dir, res_be)
+
+    # Wave 3 - QA
+    qa_ctx = f"PRD: {res_prod['content']}\nFE: {res_fe['content']}\nBE: {res_be['content']}"
+    res_qa = run_agent("qa-agent", qa_ctx, mock=mock)
+    _write_output(project_dir, res_qa)
+
+    # PM Closure
+    pm_tools = [
+        tools_registry.markdown_to_pdf,
+        tools_registry.voice_to_text,
+        tools_registry.text_to_voice,
+        tools_registry.generate_daily_report,
+    ]
+    pm_ctx = f"Project: {project_name}\nBrief: {brief}\nQA: {res_qa['content']}"
+    res_pm = run_agent("pm-orchestrator", pm_ctx, mock=mock,
+                       model_name="gemini-2.5-pro", tools=pm_tools)
+
+    summary = res_pm["content"] if not mock else (
+        f"# PM Project Summary\n\n- Project: {project_name}\n- Status: Completed\n"
+        "- Wave 1 Spec: OK\n- Wave 2 Code (Parallel): OK\n- Wave 3 QA: Passed\n")
+    (project_dir / "05-closure" / "final-report.md").write_text(summary, encoding="utf-8")
+
+    registry.set_agent_state("pm-orchestrator", AgentState.DONE)
+    registry.add_agent_message("pm-orchestrator", "system", "Project pipeline completed.", "info")
+
+    return {"status": "done", "project_dir": str(project_dir)}
+
+
+def _write_output(project_dir: Path, result: dict):
+    ofile = result.get("output_file")
+    if ofile and result.get("content"):
+        p = project_dir / ofile
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(result["content"], encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# CLI Entry-point
+# ---------------------------------------------------------------------------
 
 def main():
     if sys.stdout.encoding != 'utf-8':
@@ -131,109 +372,27 @@ def main():
             sys.stdout.reconfigure(encoding='utf-8')
         except Exception:
             pass
-            
+
     parser = argparse.ArgumentParser(description="Antigravity 2.0 Multi-Agent Orchestrator CLI (Windows Native)")
-    parser.add_argument("brief", help="Yêu cầu dự án / Project Brief")
-    parser.add_argument("--project-name", default="my-new-project", help="Tên dự án mới")
-    parser.add_argument("--no-mock", action="store_true", help="Chạy API thực tế thay vì giả lập (Yêu cầu GEMINI_API_KEY)")
+    parser.add_argument("brief", help="Project brief / task description")
+    parser.add_argument("--project-name", default="my-new-project", help="Project name")
+    parser.add_argument("--no-mock", action="store_true", help="Use real Gemini API (requires GEMINI_API_KEY)")
     args = parser.parse_args()
 
-    # Determine mock status based on arg and environment
     is_mock = not args.no_mock
     if args.no_mock and not os.environ.get("GEMINI_API_KEY"):
-        log("Cảnh báo: Yêu cầu chạy --no-mock nhưng thiếu biến GEMINI_API_KEY. Tự động chuyển sang Mock.", Colors.YELLOW)
+        log("Warning: --no-mock requested but GEMINI_API_KEY missing. Falling back to mock.", Colors.YELLOW)
         is_mock = True
 
-    project_dir = PROJECTS_DIR / args.project_name
-    log(f"=== Antigravity 2.0 Multi-Agent Orchestrator (Windows Native) ===", Colors.CYAN)
-    log(f"Execution Mode: {'MOCK SIMULATION' if is_mock else 'REAL GEMINI API'}", Colors.BOLD)
-    log(f"Project Name: {args.project_name}", Colors.BOLD)
-    log(f"Project Brief: {args.brief}\n", Colors.BOLD)
-    log(f"Target Directory: {project_dir}\n")
+    log("=== Antigravity 2.0 Multi-Agent Orchestrator (Windows Native) ===", Colors.CYAN)
+    log(f"Mode: {'MOCK' if is_mock else 'LIVE GEMINI API'}", Colors.BOLD)
+    log(f"Project: {args.project_name}", Colors.BOLD)
+    log(f"Brief: {args.brief}\n", Colors.BOLD)
 
-    # Create project directories
-    os.makedirs(project_dir / "01-initiation", exist_ok=True)
-    os.makedirs(project_dir / "02-planning", exist_ok=True)
-    os.makedirs(project_dir / "03-execution", exist_ok=True)
-    os.makedirs(project_dir / "04-monitoring", exist_ok=True)
-    os.makedirs(project_dir / "05-closure", exist_ok=True)
+    result = run_pipeline(args.brief, args.project_name, mock=is_mock)
+    log(f"\nPipeline finished: {result['status']}", Colors.GREEN)
+    log(f"Output: {result['project_dir']}", Colors.GREEN)
 
-    # Register PM tools/skills
-    pm_tools = [
-        tools_registry.markdown_to_pdf,
-        tools_registry.voice_to_text,
-        tools_registry.text_to_voice,
-        tools_registry.generate_daily_report
-    ]
-
-    # 1. Product Agent (Gemini 2.5 Flash)
-    res_prod = run_agent_simulation("product-agent", args.brief, mock=is_mock, model_name='gemini-2.5-flash')
-    if "output_file" in res_prod and res_prod["output_file"]:
-        out_path = project_dir / res_prod["output_file"]
-        out_path.write_text(res_prod["content"], encoding="utf-8")
-        log(f"-> Đã ghi file yêu cầu: {out_path}", Colors.CYAN)
-
-    # 2. Architecture Agent (Gemini 2.5 Flash)
-    res_arch = run_agent_simulation("architecture-agent", f"Yêu cầu đặc tả từ PRD:\n{res_prod['content']}", mock=is_mock, model_name='gemini-2.5-flash')
-    if "output_file" in res_arch and res_arch["output_file"]:
-        out_path = project_dir / res_arch["output_file"]
-        out_path.write_text(res_arch["content"], encoding="utf-8")
-        log(f"-> Đã ghi file spec kiến trúc: {out_path}", Colors.CYAN)
-
-    # 3. Wave 2: Run Frontend and Backend in Parallel asynchronously
-    log("\n[Wave 2: Chạy song song Frontend & Backend Agents bất đồng bộ]...", Colors.BOLD)
-    
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        fe_future = executor.submit(
-            run_agent_simulation, 
-            "frontend-agent", 
-            f"PRD: {res_prod['content']}\nSpec: {res_arch['content']}", 
-            is_mock, 
-            'gemini-2.5-flash'
-        )
-        be_future = executor.submit(
-            run_agent_simulation, 
-            "backend-agent", 
-            f"PRD: {res_prod['content']}\nSpec: {res_arch['content']}", 
-            is_mock, 
-            'gemini-2.5-flash'
-        )
-        
-        # Wait for both futures to complete
-        res_fe = fe_future.result()
-        res_be = be_future.result()
-
-    if "output_file" in res_fe and res_fe["output_file"]:
-        fe_path = project_dir / res_fe["output_file"]
-        fe_path.write_text(res_fe["content"], encoding="utf-8")
-        log(f"-> Frontend Agent đã xuất file: {fe_path}", Colors.CYAN)
-
-    if "output_file" in res_be and res_be["output_file"]:
-        be_path = project_dir / res_be["output_file"]
-        be_path.write_text(res_be["content"], encoding="utf-8")
-        log(f"-> Backend Agent đã xuất file: {be_path}", Colors.CYAN)
-
-    # 4. QA Agent (Gemini 2.5 Flash)
-    res_qa = run_agent_simulation("qa-agent", f"Yêu cầu test cho FE và BE theo AC:\n{res_prod['content']}\nFrontend Code:\n{res_fe['content']}\nBackend Code:\n{res_be['content']}", mock=is_mock, model_name='gemini-2.5-flash')
-    if "output_file" in res_qa and res_qa["output_file"]:
-        qa_path = project_dir / res_qa["output_file"]
-        qa_path.write_text(res_qa["content"], encoding="utf-8")
-        log(f"-> QA Agent đã ghi file test: {qa_path}", Colors.CYAN)
-
-    # 5. PM Closure (Gemini 2.5 Pro with Tools)
-    log("\n[Running Subagent: PM-ORCHESTRATOR using gemini-2.5-pro]...", Colors.CYAN)
-    
-    # We pass the tools to PM Orchestrator to showcase Native Tool Calling capability
-    pm_input = f"Tổng hợp và sinh báo cáo kết quả dự án:\nProject: {args.project_name}\nBrief: {args.brief}\nPRD: {res_prod['content']}\nQA Results: {res_qa['content']}"
-    res_pm = run_agent_simulation("pm-orchestrator", pm_input, mock=is_mock, model_name='gemini-2.5-pro', tools=pm_tools)
-    
-    summary_content = res_pm["content"] if not is_mock else f"# PM Project Summary\n\n- Project Name: {args.project_name}\n- Status: Completed\n- Wave 1 Spec: OK\n- Wave 2 Code (Parallel Frontend & Backend): OK\n- Wave 3 QA Tests: Passed\n"
-    
-    final_report_path = project_dir / "05-closure" / "final-report.md"
-    final_report_path.write_text(summary_content, encoding="utf-8")
-    
-    log("✓ PM Orchestrator đã tổng hợp báo cáo và đóng dự án thành công!", Colors.GREEN)
-    log(f"-> Báo cáo tổng hợp: {final_report_path}", Colors.GREEN)
 
 if __name__ == "__main__":
     main()
