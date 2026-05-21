@@ -32,7 +32,7 @@ from fastapi.responses import HTMLResponse
 import uvicorn
 
 # Import orchestrator registry and pipeline
-from orchestrate import OrchestratorRegistry, AgentState, run_pipeline, check_permission
+from orchestrate import OrchestratorRegistry, AgentState, run_pipeline, check_permission, steer_agent_pipeline
 
 # ---------------------------------------------------------------------------
 # App Setup
@@ -152,15 +152,10 @@ def generate_streaming_chat(agent_id: str, system_prompt: str, user_text: str, t
         "api_key": api_key
     }
     
-    payload = {
-        "model": actual_model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_text}
-        ],
-        "temperature": temperature,
-        "stream": True
-    }
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_text}
+    ]
     
     max_retries = 3
     delay = 2
@@ -169,37 +164,73 @@ def generate_streaming_chat(agent_id: str, system_prompt: str, user_text: str, t
     for attempt in range(1, max_retries + 1):
         print(f"[Codex Chat Stream] Agent: {agent_id} | Attempt {attempt}/{max_retries} | URL: {url}")
         try:
-            resp = requests.post(url, json=payload, headers=headers, timeout=300, stream=True)
-            
-            if resp.status_code != 200:
-                err_text = ""
-                for chunk in resp.iter_content(chunk_size=1024, decode_unicode=True):
-                    if chunk:
-                        err_text += chunk
-                        if len(err_text) > 1024:
-                            break
-                if "<!doctype html" in err_text.lower() or "<html" in err_text.lower():
-                    raise RuntimeError(f"HTTP Status {resp.status_code} | WAF Blocked (HTML)")
-                raise RuntimeError(f"HTTP Status {resp.status_code} | Body: {err_text[:300]}")
-            
             full_text = ""
-            for line in resp.iter_lines():
-                if line:
-                    decoded_line = line.decode('utf-8').strip()
-                    if decoded_line.startswith("data: "):
-                        data_str = decoded_line[6:]
-                        if data_str == "[DONE]":
-                            break
-                        try:
-                            chunk_json = json.loads(data_str)
-                            delta = chunk_json['choices'][0]['delta']
-                            if 'content' in delta:
-                                chunk_content = delta['content']
-                                full_text += chunk_content
-                                # Stream character/words to Web UI in real-time
-                                registry.stream_agent_message(agent_id, "agent", full_text, "chat")
-                        except Exception:
-                            pass
+            max_continuations = 3
+            continuation_count = 0
+            
+            while continuation_count <= max_continuations:
+                payload = {
+                    "model": actual_model,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "stream": True
+                }
+                
+                resp = requests.post(url, json=payload, headers=headers, timeout=300, stream=True)
+                
+                if resp.status_code != 200:
+                    err_text = ""
+                    for chunk in resp.iter_content(chunk_size=1024, decode_unicode=True):
+                        if chunk:
+                            err_text += chunk
+                            if len(err_text) > 1024:
+                                break
+                    if "<!doctype html" in err_text.lower() or "<html" in err_text.lower():
+                        raise RuntimeError(f"HTTP Status {resp.status_code} | WAF Blocked (HTML)")
+                    raise RuntimeError(f"HTTP Status {resp.status_code} | Body: {err_text[:300]}")
+                
+                finish_reason = None
+                current_chunk_text = ""
+                
+                for line in resp.iter_lines():
+                    if line:
+                        decoded_line = line.decode('utf-8').strip()
+                        if decoded_line.startswith("data: "):
+                            data_str = decoded_line[6:]
+                            if data_str == "[DONE]":
+                                break
+                            try:
+                                chunk_json = json.loads(data_str)
+                                choice = chunk_json['choices'][0]
+                                delta = choice['delta']
+                                
+                                if choice.get('finish_reason'):
+                                    finish_reason = choice['finish_reason']
+                                    
+                                if 'content' in delta:
+                                    chunk_content = delta['content']
+                                    current_chunk_text += chunk_content
+                                    full_text += chunk_content
+                                    # Stream character/words to Web UI in real-time
+                                    registry.stream_agent_message(agent_id, "agent", full_text, "chat")
+                            except Exception:
+                                pass
+                
+                # Check for unfinished code blocks, brackets, etc.
+                is_unfinished = (
+                    (full_text.count("```") % 2 != 0) or
+                    (full_text.count("{") > full_text.count("}")) or
+                    (full_text.count("[") > full_text.count("]"))
+                )
+                
+                if finish_reason == "length" or (finish_reason in [None, "stop"] and is_unfinished):
+                    print(f"[Auto-Continue Chat] Agent {agent_id} hit limit. continuation_count={continuation_count}")
+                    messages.append({"role": "assistant", "content": current_chunk_text})
+                    messages.append({"role": "user", "content": "Continue writing the previous part precisely."})
+                    continuation_count += 1
+                    time.sleep(1)
+                else:
+                    break
             
             registry.finalize_stream_message(agent_id)
             
@@ -247,6 +278,40 @@ def process_chat(agent_id: str, text: str):
     
     # 2. Main Agent flow
     if agent_id == "main-agent":
+        # Check for pipeline steering commands
+        text_lower = text.lower()
+        action = None
+        if any(kw in text_lower for kw in ["tạm dừng", "pause", "dừng", "stop"]):
+            action = "pause"
+        elif any(kw in text_lower for kw in ["tiếp tục", "resume", "chạy tiếp", "continue"]):
+            action = "resume"
+            
+        target_agent = None
+        if action:
+            if any(kw in text_lower for kw in ["architecture", "thiết kế", "kiến trúc"]):
+                target_agent = "architecture-agent"
+            elif any(kw in text_lower for kw in ["product", "sản phẩm", "prd"]):
+                target_agent = "product-agent"
+            elif any(kw in text_lower for kw in ["frontend", "giao diện", "fe"]):
+                target_agent = "frontend-agent"
+            elif any(kw in text_lower for kw in ["backend", "logic", "be"]):
+                target_agent = "backend-agent"
+            elif any(kw in text_lower for kw in ["qa", "test", "kiểm thử"]):
+                target_agent = "qa-agent"
+            elif any(kw in text_lower for kw in ["pm", "quản lý dự án", "điều phối"]):
+                target_agent = "pm-orchestrator"
+                
+        if action and target_agent:
+            # Execute steering
+            result_msg = steer_agent_pipeline(target_agent, action)
+            # Log message to Main Agent chat room
+            registry.add_agent_message(
+                "main-agent", "agent", 
+                f"⚙️ **[Steering Tool]** Đã nhận diện lệnh điều phối: **{action.upper()}** cho **{target_agent}**.\n\n*Kết quả:* {result_msg}", 
+                "chat"
+            )
+            return
+
         keywords = ["dự án", "xây dựng", "thiết kế", "tạo", "build", "create", "mvp", "app", "project", "lập trình"]
         if any(kw in text.lower() for kw in keywords):
             registry.add_agent_message(
@@ -343,6 +408,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Antigravity 2.0 - Agent Wall Chat</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -581,6 +647,44 @@ body {
 }
 .msg.agent .meta { color: var(--text-dim); }
 
+/* Markdown Formatting */
+.msg p { margin-bottom: 8px; }
+.msg p:last-child { margin-bottom: 0; }
+.msg h1, .msg h2, .msg h3, .msg h4, .msg h5, .msg h6 {
+    margin-top: 12px;
+    margin-bottom: 6px;
+    font-weight: 600;
+    line-height: 1.25;
+    color: inherit;
+}
+.msg h1 { font-size: 1.35em; }
+.msg h2 { font-size: 1.2em; }
+.msg h3 { font-size: 1.1em; }
+.msg ul, .msg ol { margin-left: 20px; margin-bottom: 8px; }
+.msg li { margin-bottom: 4px; }
+.msg pre {
+    background: #0d0d13;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    margin: 8px 0;
+}
+.msg code {
+    font-family: 'Consolas', 'Courier New', Courier, monospace;
+    font-size: 0.9em;
+    background: rgba(0, 0, 0, 0.25);
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+.msg pre code {
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    font-size: 0.85em;
+    color: #e4e4f0;
+}
+
 /* --- Chat Input --- */
 .chat-input-bar {
     display: flex;
@@ -673,7 +777,7 @@ body {
         </div>
         <div class="messages" id="messages"></div>
         <div class="chat-input-bar">
-            <input type="text" id="chat-input" placeholder="Type a message to this agent..." onkeydown="if(event.key==='Enter')sendChat()" />
+            <textarea id="chat-input" placeholder="Type a message to this agent..." rows="2" onkeydown="handleChatKey(event)"></textarea>
             <button onclick="sendChat()">Send</button>
         </div>
     </div>
@@ -800,7 +904,13 @@ function selectAgent(id) {
     // Fetch messages from API if we have none cached
     if (!agentMessages[id] || agentMessages[id].length === 0) {
         fetch(`/api/agents/${id}/messages`).then(r=>r.json()).then(msgs => {
-            agentMessages[id] = msgs;
+            const hasStream = agentMessages[id] && agentMessages[id].some(m => m.stream === true);
+            if (!hasStream) {
+                agentMessages[id] = msgs;
+            } else {
+                const streamMsgs = agentMessages[id].filter(m => m.stream === true);
+                agentMessages[id] = msgs.concat(streamMsgs);
+            }
             renderMessages();
         });
     } else {
@@ -811,15 +921,19 @@ function selectAgent(id) {
 function renderMessages() {
     const container = document.getElementById('messages');
     const msgs = agentMessages[activeAgent] || [];
-    container.innerHTML = msgs.map(m => {
-        const cls = m.type === 'error' ? 'error' : m.role;
-        const time = m.ts ? new Date(m.ts).toLocaleTimeString() : '';
-        return `<div class="msg ${cls}">
-            ${escapeHtml(m.text)}
-            <div class="meta">${m.role} &middot; ${time}</div>
-        </div>`;
-    }).join('');
-    container.scrollTop = container.scrollHeight;
+    // Use requestAnimationFrame for smoother updates
+    requestAnimationFrame(() => {
+        container.innerHTML = msgs.map(m => {
+            const cls = m.type === 'error' ? 'error' : m.role;
+            const time = m.ts ? new Date(m.ts).toLocaleTimeString() : '';
+            const htmlContent = (typeof marked !== 'undefined') ? marked.parse(m.text || '') : escapeHtml(m.text || '');
+            return `<div class="msg ${cls}">
+                ${htmlContent}
+                <div class="meta">${m.role} &middot; ${time}</div>
+            </div>`;
+        }).join('');
+        container.scrollTop = container.scrollHeight;
+    });
 }
 
 function sendChat() {
@@ -829,6 +943,14 @@ function sendChat() {
     input.value = '';
     // Send via WebSocket
     ws.send(JSON.stringify({ agent_id: activeAgent, text: text }));
+}
+
+function handleChatKey(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendChat();
+    }
+    // Shift+Enter allows newline in textarea
 }
 
 function startPipeline() {

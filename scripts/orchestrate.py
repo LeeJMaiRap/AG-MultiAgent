@@ -29,6 +29,40 @@ SUBAGENTS_DIR = BASE_DIR / "subagents"
 PROJECTS_DIR = BASE_DIR / "projects" / "active"
 
 # ---------------------------------------------------------------------------
+# Global Pipeline Steering Signals
+# ---------------------------------------------------------------------------
+PIPELINE_SIGNALS = {
+    "pm-orchestrator": threading.Event(),
+    "product-agent": threading.Event(),
+    "architecture-agent": threading.Event(),
+    "frontend-agent": threading.Event(),
+    "backend-agent": threading.Event(),
+    "qa-agent": threading.Event(),
+}
+for ev in PIPELINE_SIGNALS.values():
+    ev.set()
+
+def steer_agent_pipeline(agent_id: str, action: str = "resume") -> str:
+    """
+    Steer the pipeline execution for a specific sub-agent.
+    Actions: 'pause', 'resume'.
+    """
+    if agent_id not in PIPELINE_SIGNALS:
+        return f"Unknown agent: {agent_id}"
+        
+    if action == "resume":
+        PIPELINE_SIGNALS[agent_id].set()
+        registry.add_agent_message(agent_id, "system", "Steering: Received RESUME signal.", "status")
+        return f"Successfully sent RESUME signal to {agent_id}."
+    elif action == "pause":
+        PIPELINE_SIGNALS[agent_id].clear()
+        registry.add_agent_message(agent_id, "system", "Steering: Received PAUSE signal.", "status")
+        return f"Successfully sent PAUSE signal to {agent_id}."
+    else:
+        return f"Unknown action: {action}"
+
+
+# ---------------------------------------------------------------------------
 # Agent State Management
 # ---------------------------------------------------------------------------
 
@@ -96,7 +130,7 @@ def check_permission(agent_id: str, content: str) -> bool:
     and slash commands. PM Agent and all sub-agents are restricted.
     Returns True if the content is safe.
     """
-    privileged_agents = {"main-agent"}
+    privileged_agents = {"main-agent", "pm-orchestrator"}
     if agent_id in privileged_agents:
         return True
     
@@ -251,6 +285,13 @@ def run_agent(agent_name: str, task_desc: str, mock: bool = True,
               model_name: str = 'cx/gpt-5.5', tools=None) -> dict:
     """Run a single agent with full state-lifecycle tracking."""
 
+    # Wait for the resume signal if it was cleared
+    if agent_name in PIPELINE_SIGNALS:
+        if not PIPELINE_SIGNALS[agent_name].is_set():
+            registry.add_agent_message(agent_name, "system", f"Agent {agent_name} is paused / waiting for resume signal...", "info")
+            PIPELINE_SIGNALS[agent_name].wait()
+            registry.add_agent_message(agent_name, "system", f"Agent {agent_name} received resume signal. Continuing...", "info")
+
     # 1. Transition to WORKING
     registry.set_agent_state(agent_name, AgentState.WORKING, task_desc[:120])
     registry.add_agent_message(agent_name, "system", f"Starting task with model {model_name}", "status")
@@ -274,7 +315,8 @@ def run_agent(agent_name: str, task_desc: str, mock: bool = True,
 
         # 2. Transition to DONE
         registry.set_agent_state(agent_name, AgentState.DONE)
-        registry.add_agent_message(agent_name, "agent", content[:500], "output")
+        if mock:
+            registry.add_agent_message(agent_name, "agent", content, "output")
         log(f"OK {agent_name.upper()} finished.", Colors.GREEN)
 
         output_file = _output_file_for(agent_name)
@@ -301,6 +343,18 @@ def _mock_output(agent_name: str, task_desc: str) -> str:
         return "# Backend Logic\ndef handle(req): pass\n"
     elif "qa" in agent_name:
         return "# QA Tests\ndef test_main(): assert True\n"
+    elif "pm-orchestrator" in agent_name:
+        return (f"# PM Project Plan & Execution Strategy\n\n"
+                f"## 1. Project Brief Analysis\n{task_desc}\n\n"
+                f"## 2. Resource Assignment\n"
+                f"- **Product Agent**: PRD & Requirements\n"
+                f"- **Architecture Agent**: Spec & API Contract\n"
+                f"- **Frontend & Backend Agents**: Code Execution\n"
+                f"- **QA Agent**: Test Verification\n\n"
+                f"## 3. Timeline & Critical Path\n"
+                f"- Phase 1: Requirements analysis (Initiated)\n"
+                f"- Phase 2: Design & System Architecture\n"
+                f"- Phase 3: Parallel Development & QA integration\n")
     else:
         return "# Task completed successfully.\n"
 
@@ -323,15 +377,10 @@ def _real_output(agent_name, task_desc, prompt, model_name, tools):
         "api_key": api_key
     }
     
-    payload = {
-        "model": actual_model,
-        "messages": [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": task_desc}
-        ],
-        "temperature": 0.2,
-        "stream": True
-    }
+    messages = [
+        {"role": "system", "content": prompt},
+        {"role": "user", "content": task_desc}
+    ]
     
     max_retries = 3
     delay = 2
@@ -340,43 +389,81 @@ def _real_output(agent_name, task_desc, prompt, model_name, tools):
     for attempt in range(1, max_retries + 1):
         print(f"[Codex API] Agent: {agent_name} | Attempt {attempt}/{max_retries} | URL: {url}")
         try:
-            resp = requests.post(url, json=payload, headers=headers, timeout=300, stream=True)
-            
-            # Check response status code
-            if resp.status_code != 200:
-                err_text = ""
-                for chunk in resp.iter_content(chunk_size=1024, decode_unicode=True):
-                    if chunk:
-                        err_text += chunk
-                        if len(err_text) > 1024:
-                            break
-                if "<!doctype html" in err_text.lower() or "<html" in err_text.lower():
-                    raise RuntimeError(f"HTTP Status {resp.status_code} | Cloudflare WAF Blocked (HTML Response)")
-                raise RuntimeError(f"HTTP Status {resp.status_code} | Body: {err_text[:300]}")
-            
-            # Read chunk-by-chunk stream
             full_text = ""
-            for line in resp.iter_lines():
-                if line:
-                    decoded_line = line.decode('utf-8').strip()
-                    if decoded_line.startswith("data: "):
-                        data_str = decoded_line[6:]
-                        if data_str == "[DONE]":
-                            break
-                        try:
-                            chunk_json = json.loads(data_str)
-                            delta = chunk_json['choices'][0]['delta']
-                            if 'content' in delta:
-                                chunk_content = delta['content']
-                                full_text += chunk_content
-                                # Stream character/words to Web UI in real-time
-                                registry.stream_agent_message(agent_name, "agent", full_text, "output")
-                        except Exception:
-                            pass
+            max_continuations = 3
+            continuation_count = 0
             
-            # Finalize WebSocket stream
-            registry.finalize_stream_message(agent_name)
-            
+            while continuation_count <= max_continuations:
+                payload = {
+                    "model": actual_model,
+                    "messages": messages,
+                    "temperature": 0.2,
+                    "stream": True
+                }
+                
+                resp = requests.post(url, json=payload, headers=headers, timeout=300, stream=True)
+                
+                # Check response status code
+                if resp.status_code != 200:
+                    err_text = ""
+                    for chunk in resp.iter_content(chunk_size=1024, decode_unicode=True):
+                        if chunk:
+                            err_text += chunk
+                            if len(err_text) > 1024:
+                                break
+                    if "<!doctype html" in err_text.lower() or "<html" in err_text.lower():
+                        raise RuntimeError(f"HTTP Status {resp.status_code} | Cloudflare WAF Blocked (HTML Response)")
+                    raise RuntimeError(f"HTTP Status {resp.status_code} | Body: {err_text[:300]}")
+                
+                # Read chunk-by-chunk stream
+                finish_reason = None
+                current_chunk_text = ""
+                
+                for line in resp.iter_lines():
+                    if line:
+                        decoded_line = line.decode('utf-8').strip()
+                        if decoded_line.startswith("data: "):
+                            data_str = decoded_line[6:]
+                            if data_str == "[DONE]":
+                                break
+                            try:
+                                chunk_json = json.loads(data_str)
+                                choice = chunk_json['choices'][0]
+                                delta = choice['delta']
+                                
+                                if choice.get('finish_reason'):
+                                    finish_reason = choice['finish_reason']
+                                    
+                                if 'content' in delta:
+                                    chunk_content = delta['content']
+                                    current_chunk_text += chunk_content
+                                    full_text += chunk_content
+                                    # Stream character/words to Web UI in real-time
+                                    registry.stream_agent_message(agent_name, "agent", full_text, "output")
+                            except Exception:
+                                pass
+                
+                # Check for continuation
+                is_unfinished_json_or_code = (
+                    (finish_reason == "length") or
+                    (full_text.count("```") % 2 != 0) or
+                    (full_text.count("{") > full_text.count("}")) or
+                    (full_text.count("[") > full_text.count("]"))
+                )
+                
+                if is_unfinished_json_or_code and continuation_count < max_continuations:
+                    continuation_count += 1
+                    registry.add_agent_message(
+                        agent_name, 
+                        "system", 
+                        f"Phát hiện phản hồi dở dang (finish_reason={finish_reason}). Đang tự động gửi yêu cầu viết tiếp (Lượt {continuation_count}/{max_continuations})...", 
+                        "status"
+                    )
+                    messages.append({"role": "assistant", "content": current_chunk_text})
+                    messages.append({"role": "user", "content": "Continue writing from where you left off. Do not repeat anything you already wrote."})
+                else:
+                    registry.finalize_stream_message(agent_name)
+                    break
             # Output WAF Guard verification
             full_text_lower = full_text.lower()
             if "<!doctype html" in full_text_lower or "<html" in full_text_lower:
@@ -498,6 +585,11 @@ def run_pipeline(brief: str, project_name: str = "my-new-project", mock: bool = 
     # PM starts planning
     registry.set_agent_state("pm-orchestrator", AgentState.PLANNING, brief[:120])
     registry.add_agent_message("pm-orchestrator", "system", f"Received project brief: {brief}", "info")
+    
+    # Run PM Agent to analyze requirements and generate initial project layout/roadmap
+    pm_plan_prompt = f"Hãy đóng vai trò là PM Orchestrator. Hãy phân tích brief dự án: '{brief}', đề xuất sơ đồ thực thi và phân rã công việc sơ bộ cho toàn đội hình Multi-Agent (Product, Architecture, Frontend, Backend, QA) để bắt đầu. Hãy phản hồi ngắn gọn bằng tiếng Việt."
+    res_pm_plan = run_agent_with_fallback("pm-orchestrator", pm_plan_prompt, mock=mock, context=f"Brief: {brief}")
+    (project_dir / "01-initiation" / "pm_plan.md").write_text(res_pm_plan["content"], encoding="utf-8")
 
     # Wave 1 - Sequential
     # Context 1: Product Agent gets user brief
@@ -548,6 +640,9 @@ def run_pipeline(brief: str, project_name: str = "my-new-project", mock: bool = 
         f"# PM Project Summary\n\n- Project: {project_name}\n- Status: Completed\n"
         "- Wave 1 Spec: OK\n- Wave 2 Code (Parallel): OK\n- Wave 3 QA: Passed\n")
     (project_dir / "05-closure" / "final-report.md").write_text(summary, encoding="utf-8")
+
+    if mock:
+        registry.add_agent_message("pm-orchestrator", "agent", summary, "output")
 
     registry.set_agent_state("pm-orchestrator", AgentState.DONE)
     registry.add_agent_message("pm-orchestrator", "system", "Project pipeline completed.", "info")
