@@ -1,0 +1,11 @@
+Phase 21 preflight
+node -v: v22.22.2
+npm -v: 10.9.7
+fetch availability: function
+command -v tsc: missing; using dependency-free JavaScript + node --check fallback
+policy: no dependency install, no network install, local ephemeral HTTP only, no cloud/DNS/billing, no secrets, no deploy
+scripts:
+{
+  "test": "node --test tests/*.test.js",
+  "build": "node --check src/issue-api.js && node --check src/issue-ui.js && node --check src/server.js && node --check tests/*.test.js"
+}

@@ -1,0 +1,251 @@
+{
+  "agents": [
+    {
+      "id": "pm",
+      "name": "PM Agent",
+      "lane": "orchestrator",
+      "status": "idle"
+    },
+    {
+      "id": "requirements",
+      "name": "Requirements Agent",
+      "lane": "planning",
+      "status": "done"
+    },
+    {
+      "id": "backend",
+      "name": "Backend Agent",
+      "lane": "build",
+      "status": "done"
+    },
+    {
+      "id": "qa",
+      "name": "QA Agent",
+      "lane": "review",
+      "status": "done"
+    }
+  ],
+  "messages": {
+    "pm": [
+      {
+        "id": 1779330391368.3225,
+        "ts": "2026-05-21T02:26:31.368Z",
+        "role": "user",
+        "text": "tạo web bán hàng"
+      },
+      {
+        "id": 1779330391733.6853,
+        "ts": "2026-05-21T02:26:31.733Z",
+        "role": "agent",
+        "text": "Đã nhận PM task: \"tạo web bán hàng\". Bấm Run Demo Flow để chạy orchestration."
+      },
+      {
+        "id": 1779330412856.4326,
+        "ts": "2026-05-21T02:26:52.856Z",
+        "role": "agent",
+        "text": "PM SUMMARY run-1779330403030: PASS demo. Artifacts: /runs/run-1779330403030"
+      }
+    ],
+    "requirements": [
+      {
+        "id": 1779330403556.9338,
+        "ts": "2026-05-21T02:26:43.556Z",
+        "role": "agent",
+        "text": "REQ_ACK run-1779330403030: ACK: nhận task từ PM"
+      },
+      {
+        "id": 1779330404555.3794,
+        "ts": "2026-05-21T02:26:44.555Z",
+        "role": "agent",
+        "text": "REQ_WORK run-1779330403030: WORKING: phân tích scope + acceptance"
+      },
+      {
+        "id": 1779330405754.7678,
+        "ts": "2026-05-21T02:26:45.754Z",
+        "role": "agent",
+        "text": "REQ_DONE run-1779330403030: DONE: handoff Backend"
+      }
+    ],
+    "backend": [
+      {
+        "id": 1779330406443.3018,
+        "ts": "2026-05-21T02:26:46.443Z",
+        "role": "agent",
+        "text": "BE_ACK run-1779330403030: ACK: nhận handoff Requirements"
+      },
+      {
+        "id": 1779330407643.8042,
+        "ts": "2026-05-21T02:26:47.643Z",
+        "role": "agent",
+        "text": "BE_WORK run-1779330403030: WORKING: implement code"
+      },
+      {
+        "id": 1779330409247.1218,
+        "ts": "2026-05-21T02:26:49.247Z",
+        "role": "agent",
+        "text": "BE_DONE run-1779330403030: DONE: handoff QA"
+      }
+    ],
+    "qa": [
+      {
+        "id": 1779330410054.6704,
+        "ts": "2026-05-21T02:26:50.054Z",
+        "role": "agent",
+        "text": "QA_ACK run-1779330403030: ACK: nhận handoff Backend"
+      },
+      {
+        "id": 1779330411255.4778,
+        "ts": "2026-05-21T02:26:51.255Z",
+        "role": "agent",
+        "text": "QA_WORK run-1779330403030: WORKING: chạy test positive/negative"
+      },
+      {
+        "id": 1779330412846.17,
+        "ts": "2026-05-21T02:26:52.846Z",
+        "role": "agent",
+        "text": "QA_DONE run-1779330403030: DONE: PASS core flow"
+      }
+    ]
+  },
+  "mailbox": {
+    "pm": {
+      "inbox": [
+        {
+          "id": "mail-1779330412855-aeeb31fe7a6368",
+          "ts": "2026-05-21T02:26:52.855Z",
+          "from": "qa",
+          "to": "pm",
+          "type": "review",
+          "subject": "QA review run-1779330403030",
+          "body": "QA PASS, ready for PM decision",
+          "runId": "run-1779330403030",
+          "artifactUrl": "/runs/run-1779330403030/qa-report.md",
+          "read": false
+        }
+      ],
+      "outbox": [
+        {
+          "id": "mail-1779330403033-ef4ece2550c378",
+          "ts": "2026-05-21T02:26:43.033Z",
+          "from": "pm",
+          "to": "requirements",
+          "type": "task",
+          "subject": "Task run-1779330403030",
+          "body": "Build mini todo cli add/list/done",
+          "runId": "run-1779330403030",
+          "artifactUrl": null,
+          "read": false
+        }
+      ]
+    },
+    "requirements": {
+      "inbox": [
+        {
+          "id": "mail-1779330403033-ef4ece2550c378",
+          "ts": "2026-05-21T02:26:43.033Z",
+          "from": "pm",
+          "to": "requirements",
+          "type": "task",
+          "subject": "Task run-1779330403030",
+          "body": "Build mini todo cli add/list/done",
+          "runId": "run-1779330403030",
+          "artifactUrl": null,
+          "read": false
+        }
+      ],
+      "outbox": [
+        {
+          "id": "mail-1779330405756-8d17e6517429c",
+          "ts": "2026-05-21T02:26:45.756Z",
+          "from": "requirements",
+          "to": "backend",
+          "type": "handoff",
+          "subject": "REQ handoff run-1779330403030",
+          "body": "Requirements handoff ready",
+          "runId": "run-1779330403030",
+          "artifactUrl": "/runs/run-1779330403030/handoff-req-to-be.md",
+          "read": false
+        }
+      ]
+    },
+    "backend": {
+      "inbox": [
+        {
+          "id": "mail-1779330405756-8d17e6517429c",
+          "ts": "2026-05-21T02:26:45.756Z",
+          "from": "requirements",
+          "to": "backend",
+          "type": "handoff",
+          "subject": "REQ handoff run-1779330403030",
+          "body": "Requirements handoff ready",
+          "runId": "run-1779330403030",
+          "artifactUrl": "/runs/run-1779330403030/handoff-req-to-be.md",
+          "read": false
+        }
+      ],
+      "outbox": [
+        {
+          "id": "mail-1779330409249-7f8f795a84da38",
+          "ts": "2026-05-21T02:26:49.249Z",
+          "from": "backend",
+          "to": "qa",
+          "type": "handoff",
+          "subject": "BE handoff run-1779330403030",
+          "body": "Backend handoff ready",
+          "runId": "run-1779330403030",
+          "artifactUrl": "/runs/run-1779330403030/handoff-be-to-qa.md",
+          "read": false
+        }
+      ]
+    },
+    "qa": {
+      "inbox": [
+        {
+          "id": "mail-1779330409249-7f8f795a84da38",
+          "ts": "2026-05-21T02:26:49.249Z",
+          "from": "backend",
+          "to": "qa",
+          "type": "handoff",
+          "subject": "BE handoff run-1779330403030",
+          "body": "Backend handoff ready",
+          "runId": "run-1779330403030",
+          "artifactUrl": "/runs/run-1779330403030/handoff-be-to-qa.md",
+          "read": false
+        }
+      ],
+      "outbox": [
+        {
+          "id": "mail-1779330412855-aeeb31fe7a6368",
+          "ts": "2026-05-21T02:26:52.855Z",
+          "from": "qa",
+          "to": "pm",
+          "type": "review",
+          "subject": "QA review run-1779330403030",
+          "body": "QA PASS, ready for PM decision",
+          "runId": "run-1779330403030",
+          "artifactUrl": "/runs/run-1779330403030/qa-report.md",
+          "read": false
+        }
+      ]
+    }
+  },
+  "reviews": [],
+  "audit": [],
+  "runs": [
+    {
+      "runId": "run-1779330403030",
+      "ts": "2026-05-21T02:26:43.034Z",
+      "task": "Build mini todo cli add/list/done",
+      "mode": "normal",
+      "status": "done",
+      "phase": "completed",
+      "path": "/runs/run-1779330403030",
+      "artifacts": [
+        "/runs/run-1779330403030/timeline.log",
+        "/runs/run-1779330403030/requirements.log",
+        "/runs/run-1779330403030/backend.log",
+        "/runs/run-1779330403030/qa.log"
+      ]
+    }
+  ]
+}

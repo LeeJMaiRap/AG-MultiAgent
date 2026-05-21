@@ -1,0 +1,58 @@
+# Phase 44 Build / Syntax Evidence — local-bookmarks-cli-v1
+
+## Syntax Checks
+
+```text
+node --check app/src/bookmarks-store.js
+node --check app/src/bookmarks-cli.js
+```
+
+## Smoke Commands
+
+```text
+BOOKMARKS_STORE_PATH=<temp> node app/src/bookmarks-cli.js add --title "OpenClaw Docs" --url "https://docs.openclaw.ai"
+{
+  "status": "created",
+  "bookmark": {
+    "id": "bkm_001",
+    "title": "OpenClaw Docs",
+    "url": "https://docs.openclaw.ai",
+    "createdAt": "2026-05-19T16:43:30.449Z"
+  }
+}
+BOOKMARKS_STORE_PATH=<temp> node app/src/bookmarks-cli.js list
+{
+  "status": "ok",
+  "bookmarks": [
+    {
+      "id": "bkm_001",
+      "title": "OpenClaw Docs",
+      "url": "https://docs.openclaw.ai",
+      "createdAt": "2026-05-19T16:43:30.449Z"
+    }
+  ]
+}
+BOOKMARKS_STORE_PATH=<temp> node app/src/bookmarks-cli.js search openclaw
+{
+  "status": "ok",
+  "bookmarks": [
+    {
+      "id": "bkm_001",
+      "title": "OpenClaw Docs",
+      "url": "https://docs.openclaw.ai",
+      "createdAt": "2026-05-19T16:43:30.449Z"
+    }
+  ]
+}
+BOOKMARKS_STORE_PATH=<temp> node app/src/bookmarks-cli.js delete bkm_001
+{
+  "status": "deleted",
+  "id": "bkm_001"
+}
+```
+
+## Result
+
+```text
+PASS
+```

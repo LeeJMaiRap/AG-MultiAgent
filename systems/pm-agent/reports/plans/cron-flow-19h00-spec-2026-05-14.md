@@ -58,7 +58,7 @@ Thiết kế một luồng báo cáo chạy lúc **19:00 mỗi ngày** để:
 - **19:00 mỗi ngày**
 
 ## Timezone
-- Mặc định phải theo **timezone cấu hình thực tế của owner/workspace**
+- Mặc định phải theo **timezone cấu hình thực tế của ownerD:/Antigravity/LeeJ_MultiAgent**
 - Không hardcode UTC nếu mục tiêu là báo cáo theo giờ sinh hoạt của anh
 
 ## Rule
@@ -330,3 +330,4 @@ Spec này chọn hướng an toàn:
 - **không tạo report sai ngữ cảnh**
 - **không tự hòa giải dữ liệu mâu thuẫn**
 - **ưu tiên framework + project active thật sự**
+

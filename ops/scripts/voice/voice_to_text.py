@@ -7,8 +7,8 @@ import pathlib
 import subprocess
 import sys
 
-DEFAULT_VENV = pathlib.Path('/root/.openclaw/workspace/.venvs/voice-stack')
-DEFAULT_OUTPUT_DIR = pathlib.Path('/root/.openclaw/workspace/ops/tmp/voice/transcripts')
+DEFAULT_VENV = pathlib.Path('D:/Antigravity/LeeJ_MultiAgent/.venvs/voice-stack')
+DEFAULT_OUTPUT_DIR = pathlib.Path('D:/Antigravity/LeeJ_MultiAgent/ops/tmp/voice/transcripts')
 
 SCRIPT_TEMPLATE = """from faster_whisper import WhisperModel\nmodel = WhisperModel({model!r}, compute_type='int8')\nsegments, info = model.transcribe({audio!r}, language={language!r})\nprint('LANG:', info.language)\nprint('PROB:', info.language_probability)\nprint('---TRANSCRIPT---')\nfor segment in segments:\n    print(segment.text.strip())\n"""
 
@@ -59,3 +59,4 @@ def main() -> int:
 
 if __name__ == '__main__':
     raise SystemExit(main())
+

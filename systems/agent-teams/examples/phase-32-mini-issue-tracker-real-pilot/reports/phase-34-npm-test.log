@@ -1,0 +1,63 @@
+$ npm test
+
+> mini-issue-tracker-v1@0.1.0 test
+> node --test tests/server.test.js
+
+TAP version 13
+# Subtest: GET /api/issues returns empty issue list
+ok 1 - GET /api/issues returns empty issue list
+  ---
+  duration_ms: 85.642985
+  type: 'test'
+  ...
+# Subtest: POST /api/issues creates issue and GET /api/issues lists it
+ok 2 - POST /api/issues creates issue and GET /api/issues lists it
+  ---
+  duration_ms: 22.767802
+  type: 'test'
+  ...
+# Subtest: GET /issues renders empty state and created issue HTML
+ok 3 - GET /issues renders empty state and created issue HTML
+  ---
+  duration_ms: 19.690485
+  type: 'test'
+  ...
+# Subtest: GET /issues escapes user-provided HTML
+ok 4 - GET /issues escapes user-provided HTML
+  ---
+  duration_ms: 8.546797
+  type: 'test'
+  ...
+# Subtest: POST /api/issues rejects missing title with 400
+ok 5 - POST /api/issues rejects missing title with 400
+  ---
+  duration_ms: 10.079012
+  type: 'test'
+  ...
+# Subtest: POST /api/issues rejects malformed JSON with 400
+ok 6 - POST /api/issues rejects malformed JSON with 400
+  ---
+  duration_ms: 6.021698
+  type: 'test'
+  ...
+# Subtest: POST /api/issues rejects oversized JSON with 413
+ok 7 - POST /api/issues rejects oversized JSON with 413
+  ---
+  duration_ms: 11.541254
+  type: 'test'
+  ...
+# Subtest: unknown route returns JSON 404
+ok 8 - unknown route returns JSON 404
+  ---
+  duration_ms: 4.848369
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 263.178054

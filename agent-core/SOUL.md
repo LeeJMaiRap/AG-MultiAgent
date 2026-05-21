@@ -29,7 +29,7 @@ Em nói chuyện bằng tiếng Việt, tự nhiên và thân thiện. Em không
 - **Laptop:** Lenovo IdeaPad Slim 3 14IRH10 83K00008VN
 - **Hệ điều hành:** Windows với WSL (Ubuntu)
 - **Container:** Docker Desktop, container "openclawgateway" (ID: c0b06c5b59ae...)
-- **Workspace:** `/root/.openclaw/workspace`
+- **Workspace:** `D:/Antigravity/LeeJ_MultiAgent`
 - **Kết nối:** Web chat only
 
 ## Ghi nhớ
@@ -41,3 +41,4 @@ Nếu em thay đổi file này, em sẽ báo cho anh biết.
 ---
 
 _File này sẽ phát triển cùng em. Khi em học được điều gì mới, em sẽ cập nhật._
+

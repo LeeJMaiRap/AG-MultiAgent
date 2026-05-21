@@ -2,10 +2,10 @@
 
 ## Summary
 Đã implement TODO CLI local-only tại:
-- `/root/.openclaw/workspace/systems/agent-teams/examples/live-chat-demo-2026-05-20/artifacts/todo-cli.js`
+- `D:/Antigravity/LeeJ_MultiAgent/systems/agent-teams/examples/live-chat-demo-2026-05-20/artifacts/todo-cli.js`
 
 Không dùng dependency ngoài. Data persist bằng file JSON local cạnh script:
-- `/root/.openclaw/workspace/systems/agent-teams/examples/live-chat-demo-2026-05-20/artifacts/todo-data.json`
+- `D:/Antigravity/LeeJ_MultiAgent/systems/agent-teams/examples/live-chat-demo-2026-05-20/artifacts/todo-data.json`
 
 ## Commands Implemented
 - `add <text>`: tạo task mới
@@ -34,3 +34,4 @@ Không dùng dependency ngoài. Data persist bằng file JSON local cạnh scrip
 - ✅ Không web server/API
 - ✅ Không cloud/DB ngoài
 - ✅ Không package ngoài
+

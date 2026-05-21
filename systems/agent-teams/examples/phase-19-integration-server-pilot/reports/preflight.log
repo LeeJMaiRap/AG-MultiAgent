@@ -1,0 +1,25 @@
+# Phase 19 Preflight Log
+
+## Working Directory
+/root/.openclaw/workspace
+
+## node -v
+v22.22.2
+
+## npm -v
+10.9.7
+
+## fetch availability
+function
+
+## command -v tsc
+tsc missing; using dependency-free JavaScript + node --check fallback
+
+## package scripts
+{
+  "test": "node --test tests/*.test.js",
+  "build": "node --check src/issue-api.js && node --check src/issue-ui.js && node --check src/server.js && node --check tests/*.test.js"
+}
+
+## install/network policy
+No dependency install. No network install. Local ephemeral HTTP only. No cloud/DNS/billing. No secrets. No deploy.

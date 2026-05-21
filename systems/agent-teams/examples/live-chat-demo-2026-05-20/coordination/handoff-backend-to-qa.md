@@ -1,8 +1,8 @@
 # Handoff: Backend -> QA
 
 ## Deliverables
-- Code: `/root/.openclaw/workspace/systems/agent-teams/examples/live-chat-demo-2026-05-20/artifacts/todo-cli.js`
-- Report: `/root/.openclaw/workspace/systems/agent-teams/examples/live-chat-demo-2026-05-20/reports/backend-agent.md`
+- Code: `D:/Antigravity/LeeJ_MultiAgent/systems/agent-teams/examples/live-chat-demo-2026-05-20/artifacts/todo-cli.js`
+- Report: `D:/Antigravity/LeeJ_MultiAgent/systems/agent-teams/examples/live-chat-demo-2026-05-20/reports/backend-agent.md`
 
 ## Runtime
 - Node.js, không cần cài package.
@@ -61,3 +61,4 @@
 ## Notes
 - ID unique tăng dần theo `nextId`, không reuse sau delete.
 - Nếu file JSON hỏng format, script fail với message đọc file lỗi (exit `1`).
+

@@ -1,0 +1,29 @@
+# Phase 44 Preflight — local-bookmarks-cli-v1
+
+## Commands
+
+```text
+node --version
+v22.22.2
+npm --version
+10.9.7
+node -e "console.log(typeof require('fs')); console.log(typeof require('path')); console.log(typeof require('crypto'))"
+object
+object
+object
+```
+
+## Dependency Policy
+
+```text
+No dependency install required.
+Use Node.js built-in modules only.
+No browser binary install/download.
+No deploy/cloud/DNS/billing/secrets.
+```
+
+## Result
+
+```text
+PASS
+```

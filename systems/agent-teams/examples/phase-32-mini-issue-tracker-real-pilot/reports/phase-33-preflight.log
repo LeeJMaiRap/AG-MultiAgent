@@ -1,0 +1,8 @@
+$ node -v
+v22.22.2
+$ npm -v
+10.9.7
+$ node -e "console.log(typeof fetch)"
+function
+$ command -v tsc || true
+policy: no dependency install, no network install, local syntax/build only, no cloud/DNS/billing, no secrets, no deploy

@@ -50,7 +50,7 @@ N/A — not applicable to docs-only dry run
 [ ] PASS/FAIL architecture/agent-team-structure.md exists
 [ ] PASS/FAIL architecture/communication-model.md exists
 [ ] PASS/FAIL architecture/orchestration-model.md exists
-[ ] PASS/FAIL architecture/workspace-ownership-model.md exists
+[ ] PASS/FAIL architectureD:/Antigravity/LeeJ_MultiAgent-ownership-model.md exists
 ```
 
 Expected:
@@ -397,3 +397,4 @@ grep -R "Forbidden\|Stop\|production\|secret\|rollback" -n systems/agent-teams/e
 ## Notes
 
 This checklist is intentionally conservative. Phase 9 changes current PM Agent behavior, so docs-only system should be internally consistent before wiring/refactor.
+

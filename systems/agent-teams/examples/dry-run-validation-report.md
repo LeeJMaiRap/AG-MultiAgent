@@ -68,7 +68,7 @@ PASS systems/agent-teams/README.md
 PASS systems/agent-teams/architecture/agent-team-structure.md
 PASS systems/agent-teams/architecture/communication-model.md
 PASS systems/agent-teams/architecture/orchestration-model.md
-PASS systems/agent-teams/architecture/workspace-ownership-model.md
+PASS systems/agent-teams/architectureD:/Antigravity/LeeJ_MultiAgent-ownership-model.md
 ```
 
 ## Required Runtime Protocols
@@ -218,3 +218,4 @@ Before Phase 9 edits:
 PASS — Phase 8 dry-run validation complete.
 Recommended next step: Phase 9 planning and PM Agent refactor, after user approval.
 ```
+

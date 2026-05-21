@@ -9,8 +9,8 @@ Validate CLI behavior from backend handoff for:
 - persistence + invalid input handling
 
 ## Test Artifact
-- Log: `/root/.openclaw/workspace/systems/agent-teams/examples/live-chat-demo-2026-05-20/artifacts/qa-test.log`
-- CLI tested: `/root/.openclaw/workspace/systems/agent-teams/examples/live-chat-demo-2026-05-20/artifacts/todo-cli.js`
+- Log: `D:/Antigravity/LeeJ_MultiAgent/systems/agent-teams/examples/live-chat-demo-2026-05-20/artifacts/qa-test.log`
+- CLI tested: `D:/Antigravity/LeeJ_MultiAgent/systems/agent-teams/examples/live-chat-demo-2026-05-20/artifacts/todo-cli.js`
 
 ## Environment
 - Local Node.js runtime
@@ -50,3 +50,4 @@ Validate CLI behavior from backend handoff for:
 
 ## QA Verdict
 **PASS** for current demo scope.
+

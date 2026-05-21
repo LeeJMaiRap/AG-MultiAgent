@@ -31,7 +31,7 @@
 - **Laptop:** Lenovo IdeaPad Slim 3 14IRH10 83K00008VN
 - **Hệ điều hành:** Windows + WSL (Ubuntu)
 - **Container:** Docker Desktop, container `openclawgateway`
-- **Workspace:** `/root/.openclaw/workspace`
+- **Workspace:** `D:/Antigravity/LeeJ_MultiAgent`
 
 ## Hệ thống bộ nhớ
 - Áp dụng mô hình lấy cảm hứng từ `claude-mem`
@@ -61,3 +61,4 @@
   - frontend dev mode
   - frontend + backend thật
   - hay full end-to-end có database.
+

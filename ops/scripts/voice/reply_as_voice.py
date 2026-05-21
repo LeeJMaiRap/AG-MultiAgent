@@ -6,7 +6,7 @@ import pathlib
 import subprocess
 import sys
 
-DEFAULT_TTS_SCRIPT = pathlib.Path('/root/.openclaw/workspace/ops/scripts/voice/text_to_voice.py')
+DEFAULT_TTS_SCRIPT = pathlib.Path('D:/Antigravity/LeeJ_MultiAgent/ops/scripts/voice/text_to_voice.py')
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -60,3 +60,4 @@ def main() -> int:
 
 if __name__ == '__main__':
     raise SystemExit(main())
+

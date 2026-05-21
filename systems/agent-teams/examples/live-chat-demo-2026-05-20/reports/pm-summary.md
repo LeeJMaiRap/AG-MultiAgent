@@ -10,8 +10,8 @@ Backend -> QA handoff received and validated.
 - No dependency install
 
 ## Artifacts
-- Test log: `/root/.openclaw/workspace/systems/agent-teams/examples/live-chat-demo-2026-05-20/artifacts/qa-test.log`
-- QA report: `/root/.openclaw/workspace/systems/agent-teams/examples/live-chat-demo-2026-05-20/reports/qa-agent.md`
+- Test log: `D:/Antigravity/LeeJ_MultiAgent/systems/agent-teams/examples/live-chat-demo-2026-05-20/artifacts/qa-test.log`
+- QA report: `D:/Antigravity/LeeJ_MultiAgent/systems/agent-teams/examples/live-chat-demo-2026-05-20/reports/qa-agent.md`
 
 ## Outcome
 - All expected behaviors passed
@@ -21,3 +21,4 @@ Backend -> QA handoff received and validated.
 ## Risks/Follow-up
 - None blocking for demo scope
 - Optional future test: corrupted JSON file recovery path
+

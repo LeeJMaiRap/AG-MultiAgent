@@ -1,0 +1,4 @@
+
+> phase-22-browser-ui-proof@0.1.0 build
+> node --check src/issue-api.js && node --check src/issue-ui.js && node --check src/server.js && node --check tests/*.test.js
+

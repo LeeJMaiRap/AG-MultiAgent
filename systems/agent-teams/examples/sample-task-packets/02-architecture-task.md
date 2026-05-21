@@ -39,7 +39,7 @@ projects/web-ban-acc-game/02-architecture/architecture.md
 ```text
 projects/web-ban-acc-game/01-requirements/prd.md
 systems/agent-teams/templates/architecture-decision-record-template.md
-systems/agent-teams/architecture/workspace-ownership-model.md
+systems/agent-teams/architectureD:/Antigravity/LeeJ_MultiAgent-ownership-model.md
 ```
 
 ## Forbidden Paths
@@ -73,3 +73,4 @@ systems/agent-teams/**
 [ ] FE/BE/API boundaries are clear
 [ ] dependencies and risks are listed
 ```
+

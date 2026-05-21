@@ -8,8 +8,8 @@ import subprocess
 import sys
 from typing import Tuple
 
-DEFAULT_STT_SCRIPT = pathlib.Path('/root/.openclaw/workspace/ops/scripts/voice/voice_to_text.py')
-DEFAULT_TRANSCRIPT_DIR = pathlib.Path('/root/.openclaw/workspace/ops/tmp/voice/transcripts')
+DEFAULT_STT_SCRIPT = pathlib.Path('D:/Antigravity/LeeJ_MultiAgent/ops/scripts/voice/voice_to_text.py')
+DEFAULT_TRANSCRIPT_DIR = pathlib.Path('D:/Antigravity/LeeJ_MultiAgent/ops/tmp/voice/transcripts')
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -138,3 +138,4 @@ def main() -> int:
 
 if __name__ == '__main__':
     raise SystemExit(main())
+

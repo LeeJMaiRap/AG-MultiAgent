@@ -1,0 +1,44 @@
+
+> phase-18-real-api-ui-pilot@0.1.0 test
+> node --test tests/*.test.js
+
+TAP version 13
+# Subtest: creates and lists issues through local API helper
+ok 1 - creates and lists issues through local API helper
+  ---
+  duration_ms: 1.693995
+  type: 'test'
+  ...
+# Subtest: rejects blank issue title
+ok 2 - rejects blank issue title
+  ---
+  duration_ms: 0.244978
+  type: 'test'
+  ...
+# Subtest: updates issue status with validation
+ok 3 - updates issue status with validation
+  ---
+  duration_ms: 0.277303
+  type: 'test'
+  ...
+# Subtest: renders empty issue list state
+ok 4 - renders empty issue list state
+  ---
+  duration_ms: 0.955629
+  type: 'test'
+  ...
+# Subtest: renders issue list and escapes unsafe text
+ok 5 - renders issue list and escapes unsafe text
+  ---
+  duration_ms: 0.267598
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 91.662319

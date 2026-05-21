@@ -1,0 +1,24 @@
+# Phase 45 Integration Test Log — local-bookmarks-cli-v1
+
+## Command
+
+```text
+node app/tests/bookmarks-cli.test.js
+```
+
+## Output
+
+```text
+PASS happy path: add, list, search, delete bookmark
+PASS add rejects missing title
+PASS add rejects missing url
+PASS add rejects invalid url
+PASS delete returns not found for unknown id
+PASS unknown command returns usage error
+```
+
+## Result
+
+```text
+PASS: 6 tests, 6 pass, 0 fail
+```

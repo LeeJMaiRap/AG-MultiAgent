@@ -1,0 +1,8 @@
+--- command -v chromium || command -v chromium-browser || true ---
+--- command -v google-chrome || command -v google-chrome-stable || true ---
+--- test -x playwright chromium path ---
+missing executable
+--- node require playwright ---
+playwright package present
+--- node require puppeteer ---
+puppeteer package missing

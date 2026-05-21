@@ -1,0 +1,776 @@
+{
+  "agents": [
+    {
+      "id": "pm",
+      "name": "PM Agent",
+      "lane": "orchestrator",
+      "status": "idle"
+    },
+    {
+      "id": "requirements",
+      "name": "Requirements Agent",
+      "lane": "planning",
+      "status": "done"
+    },
+    {
+      "id": "backend",
+      "name": "Backend Agent",
+      "lane": "build",
+      "status": "done"
+    },
+    {
+      "id": "qa",
+      "name": "QA Agent",
+      "lane": "review",
+      "status": "done"
+    }
+  ],
+  "messages": {
+    "pm": [
+      {
+        "id": 1779327023161.5403,
+        "ts": "2026-05-21T01:30:23.161Z",
+        "role": "agent",
+        "text": "PM SUMMARY run-1779327013354: PASS demo. Artifacts: /runs/run-1779327013354"
+      },
+      {
+        "id": 1779327032926.751,
+        "ts": "2026-05-21T01:30:32.926Z",
+        "role": "agent",
+        "text": "PM SUMMARY run-1779327023125: PASS demo. Artifacts: /runs/run-1779327023125"
+      },
+      {
+        "id": 1779327035161.982,
+        "ts": "2026-05-21T01:30:35.161Z",
+        "role": "agent",
+        "text": "PM SUMMARY run-1779327025358: PASS demo. Artifacts: /runs/run-1779327025358"
+      },
+      {
+        "id": 1779327035259.618,
+        "ts": "2026-05-21T01:30:35.259Z",
+        "role": "agent",
+        "text": "PM SUMMARY run-1779327025358: PASS with retry (qa fail recovered). Artifacts: /runs/run-1779327025358"
+      },
+      {
+        "id": 1779327044931.1663,
+        "ts": "2026-05-21T01:30:44.931Z",
+        "role": "agent",
+        "text": "PM SUMMARY run-1779327035123: PASS demo. Artifacts: /runs/run-1779327035123"
+      },
+      {
+        "id": 1779327045030.0735,
+        "ts": "2026-05-21T01:30:45.030Z",
+        "role": "agent",
+        "text": "PM SUMMARY run-1779327035123: PASS with retry (qa fail recovered). Artifacts: /runs/run-1779327035123"
+      }
+    ],
+    "requirements": [
+      {
+        "id": 1779327013858.9255,
+        "ts": "2026-05-21T01:30:13.858Z",
+        "role": "agent",
+        "text": "REQ_ACK run-1779327013354: ACK: nhận task từ PM"
+      },
+      {
+        "id": 1779327014859.9885,
+        "ts": "2026-05-21T01:30:14.859Z",
+        "role": "agent",
+        "text": "REQ_WORK run-1779327013354: WORKING: phân tích scope + acceptance"
+      },
+      {
+        "id": 1779327016059.5352,
+        "ts": "2026-05-21T01:30:16.059Z",
+        "role": "agent",
+        "text": "REQ_DONE run-1779327013354: DONE: handoff Backend"
+      },
+      {
+        "id": 1779327023628.6382,
+        "ts": "2026-05-21T01:30:23.628Z",
+        "role": "agent",
+        "text": "REQ_ACK run-1779327023125: ACK: nhận task từ PM"
+      },
+      {
+        "id": 1779327024627.587,
+        "ts": "2026-05-21T01:30:24.627Z",
+        "role": "agent",
+        "text": "REQ_WORK run-1779327023125: WORKING: phân tích scope + acceptance"
+      },
+      {
+        "id": 1779327025827.0266,
+        "ts": "2026-05-21T01:30:25.827Z",
+        "role": "agent",
+        "text": "REQ_DONE run-1779327023125: DONE: handoff Backend"
+      },
+      {
+        "id": 1779327025861.742,
+        "ts": "2026-05-21T01:30:25.861Z",
+        "role": "agent",
+        "text": "REQ_ACK run-1779327025358: ACK: nhận task từ PM"
+      },
+      {
+        "id": 1779327026861.6057,
+        "ts": "2026-05-21T01:30:26.861Z",
+        "role": "agent",
+        "text": "REQ_WORK run-1779327025358: WORKING: phân tích scope + acceptance"
+      },
+      {
+        "id": 1779327028062.0771,
+        "ts": "2026-05-21T01:30:28.062Z",
+        "role": "agent",
+        "text": "REQ_DONE run-1779327025358: DONE: handoff Backend"
+      },
+      {
+        "id": 1779327035628.5454,
+        "ts": "2026-05-21T01:30:35.628Z",
+        "role": "agent",
+        "text": "REQ_ACK run-1779327035123: ACK: nhận task từ PM"
+      },
+      {
+        "id": 1779327036628.2651,
+        "ts": "2026-05-21T01:30:36.628Z",
+        "role": "agent",
+        "text": "REQ_WORK run-1779327035123: WORKING: phân tích scope + acceptance"
+      },
+      {
+        "id": 1779327037829.8604,
+        "ts": "2026-05-21T01:30:37.829Z",
+        "role": "agent",
+        "text": "REQ_DONE run-1779327035123: DONE: handoff Backend"
+      }
+    ],
+    "backend": [
+      {
+        "id": 1779327016758.457,
+        "ts": "2026-05-21T01:30:16.758Z",
+        "role": "agent",
+        "text": "BE_ACK run-1779327013354: ACK: nhận handoff Requirements"
+      },
+      {
+        "id": 1779327017958.3218,
+        "ts": "2026-05-21T01:30:17.958Z",
+        "role": "agent",
+        "text": "BE_WORK run-1779327013354: WORKING: implement code"
+      },
+      {
+        "id": 1779327019558.1028,
+        "ts": "2026-05-21T01:30:19.558Z",
+        "role": "agent",
+        "text": "BE_DONE run-1779327013354: DONE: handoff QA"
+      },
+      {
+        "id": 1779327026527.3936,
+        "ts": "2026-05-21T01:30:26.527Z",
+        "role": "agent",
+        "text": "BE_ACK run-1779327023125: ACK: nhận handoff Requirements"
+      },
+      {
+        "id": 1779327027727.8457,
+        "ts": "2026-05-21T01:30:27.727Z",
+        "role": "agent",
+        "text": "BE_WORK run-1779327023125: WORKING: implement code"
+      },
+      {
+        "id": 1779327028763.972,
+        "ts": "2026-05-21T01:30:28.763Z",
+        "role": "agent",
+        "text": "BE_ACK run-1779327025358: ACK: nhận handoff Requirements"
+      },
+      {
+        "id": 1779327029326.8354,
+        "ts": "2026-05-21T01:30:29.326Z",
+        "role": "agent",
+        "text": "BE_DONE run-1779327023125: DONE: handoff QA"
+      },
+      {
+        "id": 1779327029962.1106,
+        "ts": "2026-05-21T01:30:29.962Z",
+        "role": "agent",
+        "text": "BE_WORK run-1779327025358: WORKING: implement code"
+      },
+      {
+        "id": 1779327031558.838,
+        "ts": "2026-05-21T01:30:31.558Z",
+        "role": "agent",
+        "text": "BE_DONE run-1779327025358: DONE: handoff QA"
+      },
+      {
+        "id": 1779327038528.9983,
+        "ts": "2026-05-21T01:30:38.528Z",
+        "role": "agent",
+        "text": "BE_ACK run-1779327035123: ACK: nhận handoff Requirements"
+      },
+      {
+        "id": 1779327039728.6262,
+        "ts": "2026-05-21T01:30:39.728Z",
+        "role": "agent",
+        "text": "BE_WORK run-1779327035123: WORKING: implement code"
+      },
+      {
+        "id": 1779327041330.3757,
+        "ts": "2026-05-21T01:30:41.330Z",
+        "role": "agent",
+        "text": "BE_DONE run-1779327035123: DONE: handoff QA"
+      }
+    ],
+    "qa": [
+      {
+        "id": 1779327020359.961,
+        "ts": "2026-05-21T01:30:20.359Z",
+        "role": "agent",
+        "text": "QA_ACK run-1779327013354: ACK: nhận handoff Backend"
+      },
+      {
+        "id": 1779327021560.4287,
+        "ts": "2026-05-21T01:30:21.560Z",
+        "role": "agent",
+        "text": "QA_WORK run-1779327013354: WORKING: chạy test positive/negative"
+      },
+      {
+        "id": 1779327023158.9893,
+        "ts": "2026-05-21T01:30:23.158Z",
+        "role": "agent",
+        "text": "QA_DONE run-1779327013354: DONE: PASS core flow"
+      },
+      {
+        "id": 1779327030126.9202,
+        "ts": "2026-05-21T01:30:30.126Z",
+        "role": "agent",
+        "text": "QA_ACK run-1779327023125: ACK: nhận handoff Backend"
+      },
+      {
+        "id": 1779327031324.8813,
+        "ts": "2026-05-21T01:30:31.324Z",
+        "role": "agent",
+        "text": "QA_WORK run-1779327023125: WORKING: chạy test positive/negative"
+      },
+      {
+        "id": 1779327032358.1,
+        "ts": "2026-05-21T01:30:32.358Z",
+        "role": "agent",
+        "text": "QA_ACK run-1779327025358: ACK: nhận handoff Backend"
+      },
+      {
+        "id": 1779327032924.867,
+        "ts": "2026-05-21T01:30:32.924Z",
+        "role": "agent",
+        "text": "QA_DONE run-1779327023125: DONE: PASS core flow"
+      },
+      {
+        "id": 1779327033558.6787,
+        "ts": "2026-05-21T01:30:33.558Z",
+        "role": "agent",
+        "text": "WORKING run-1779327025358: chạy test gặp lỗi"
+      },
+      {
+        "id": 1779327035158.1472,
+        "ts": "2026-05-21T01:30:35.158Z",
+        "role": "agent",
+        "text": "QA_DONE run-1779327025358: DONE: PASS core flow"
+      },
+      {
+        "id": 1779327035259.812,
+        "ts": "2026-05-21T01:30:35.259Z",
+        "role": "agent",
+        "text": "DONE run-1779327025358: RETRY PASS after fix"
+      },
+      {
+        "id": 1779327042129.3723,
+        "ts": "2026-05-21T01:30:42.129Z",
+        "role": "agent",
+        "text": "QA_ACK run-1779327035123: ACK: nhận handoff Backend"
+      },
+      {
+        "id": 1779327043328.219,
+        "ts": "2026-05-21T01:30:43.328Z",
+        "role": "agent",
+        "text": "WORKING run-1779327035123: chạy test gặp lỗi"
+      },
+      {
+        "id": 1779327044929.7034,
+        "ts": "2026-05-21T01:30:44.929Z",
+        "role": "agent",
+        "text": "QA_DONE run-1779327035123: DONE: PASS core flow"
+      },
+      {
+        "id": 1779327045030.8264,
+        "ts": "2026-05-21T01:30:45.030Z",
+        "role": "agent",
+        "text": "DONE run-1779327035123: RETRY PASS after fix"
+      }
+    ]
+  },
+  "mailbox": {
+    "pm": {
+      "inbox": [
+        {
+          "id": "mail-1779327023160-170bcedb1d776",
+          "ts": "2026-05-21T01:30:23.160Z",
+          "from": "qa",
+          "to": "pm",
+          "type": "review",
+          "subject": "QA review run-1779327013354",
+          "body": "QA PASS, ready for PM decision",
+          "runId": "run-1779327013354",
+          "artifactUrl": "/runs/run-1779327013354/qa-report.md",
+          "read": false
+        },
+        {
+          "id": "mail-1779327032926-62857d4dd572b",
+          "ts": "2026-05-21T01:30:32.926Z",
+          "from": "qa",
+          "to": "pm",
+          "type": "review",
+          "subject": "QA review run-1779327023125",
+          "body": "QA PASS, ready for PM decision",
+          "runId": "run-1779327023125",
+          "artifactUrl": "/runs/run-1779327023125/qa-report.md",
+          "read": false
+        },
+        {
+          "id": "mail-1779327035161-3d3343bdfa773",
+          "ts": "2026-05-21T01:30:35.161Z",
+          "from": "qa",
+          "to": "pm",
+          "type": "review",
+          "subject": "QA review run-1779327025358",
+          "body": "QA PASS, ready for PM decision",
+          "runId": "run-1779327025358",
+          "artifactUrl": "/runs/run-1779327025358/qa-report.md",
+          "read": false
+        },
+        {
+          "id": "mail-1779327044931-96a4383547cab",
+          "ts": "2026-05-21T01:30:44.931Z",
+          "from": "qa",
+          "to": "pm",
+          "type": "review",
+          "subject": "QA review run-1779327035123",
+          "body": "QA PASS, ready for PM decision",
+          "runId": "run-1779327035123",
+          "artifactUrl": "/runs/run-1779327035123/qa-report.md",
+          "read": false
+        }
+      ],
+      "outbox": [
+        {
+          "id": "mail-1779327013357-777c8c9481b33",
+          "ts": "2026-05-21T01:30:13.357Z",
+          "from": "pm",
+          "to": "requirements",
+          "type": "task",
+          "subject": "Task run-1779327013354",
+          "body": "UI-triggered full acceptance normal",
+          "runId": "run-1779327013354",
+          "artifactUrl": null,
+          "read": false
+        },
+        {
+          "id": "mail-1779327023126-87b9b63f0f55a",
+          "ts": "2026-05-21T01:30:23.126Z",
+          "from": "pm",
+          "to": "requirements",
+          "type": "task",
+          "subject": "Task run-1779327023125",
+          "body": "UI-triggered full acceptance normal",
+          "runId": "run-1779327023125",
+          "artifactUrl": null,
+          "read": false
+        },
+        {
+          "id": "mail-1779327025360-7d00089039267",
+          "ts": "2026-05-21T01:30:25.360Z",
+          "from": "pm",
+          "to": "requirements",
+          "type": "task",
+          "subject": "Task run-1779327025358",
+          "body": "UI-triggered full acceptance fail/retry",
+          "runId": "run-1779327025358",
+          "artifactUrl": null,
+          "read": false
+        },
+        {
+          "id": "mail-1779327035127-c67bf55700eac",
+          "ts": "2026-05-21T01:30:35.127Z",
+          "from": "pm",
+          "to": "requirements",
+          "type": "task",
+          "subject": "Task run-1779327035123",
+          "body": "UI-triggered full acceptance fail/retry",
+          "runId": "run-1779327035123",
+          "artifactUrl": null,
+          "read": false
+        }
+      ]
+    },
+    "requirements": {
+      "inbox": [
+        {
+          "id": "mail-1779327013357-777c8c9481b33",
+          "ts": "2026-05-21T01:30:13.357Z",
+          "from": "pm",
+          "to": "requirements",
+          "type": "task",
+          "subject": "Task run-1779327013354",
+          "body": "UI-triggered full acceptance normal",
+          "runId": "run-1779327013354",
+          "artifactUrl": null,
+          "read": false
+        },
+        {
+          "id": "mail-1779327023126-87b9b63f0f55a",
+          "ts": "2026-05-21T01:30:23.126Z",
+          "from": "pm",
+          "to": "requirements",
+          "type": "task",
+          "subject": "Task run-1779327023125",
+          "body": "UI-triggered full acceptance normal",
+          "runId": "run-1779327023125",
+          "artifactUrl": null,
+          "read": false
+        },
+        {
+          "id": "mail-1779327025360-7d00089039267",
+          "ts": "2026-05-21T01:30:25.360Z",
+          "from": "pm",
+          "to": "requirements",
+          "type": "task",
+          "subject": "Task run-1779327025358",
+          "body": "UI-triggered full acceptance fail/retry",
+          "runId": "run-1779327025358",
+          "artifactUrl": null,
+          "read": false
+        },
+        {
+          "id": "mail-1779327035127-c67bf55700eac",
+          "ts": "2026-05-21T01:30:35.127Z",
+          "from": "pm",
+          "to": "requirements",
+          "type": "task",
+          "subject": "Task run-1779327035123",
+          "body": "UI-triggered full acceptance fail/retry",
+          "runId": "run-1779327035123",
+          "artifactUrl": null,
+          "read": false
+        }
+      ],
+      "outbox": [
+        {
+          "id": "mail-1779327016059-013facea69666",
+          "ts": "2026-05-21T01:30:16.059Z",
+          "from": "requirements",
+          "to": "backend",
+          "type": "handoff",
+          "subject": "REQ handoff run-1779327013354",
+          "body": "Requirements handoff ready",
+          "runId": "run-1779327013354",
+          "artifactUrl": "/runs/run-1779327013354/handoff-req-to-be.md",
+          "read": false
+        },
+        {
+          "id": "mail-1779327025827-5d3dae4dd795d",
+          "ts": "2026-05-21T01:30:25.827Z",
+          "from": "requirements",
+          "to": "backend",
+          "type": "handoff",
+          "subject": "REQ handoff run-1779327023125",
+          "body": "Requirements handoff ready",
+          "runId": "run-1779327023125",
+          "artifactUrl": "/runs/run-1779327023125/handoff-req-to-be.md",
+          "read": false
+        },
+        {
+          "id": "mail-1779327028062-e3bec651f39e8",
+          "ts": "2026-05-21T01:30:28.062Z",
+          "from": "requirements",
+          "to": "backend",
+          "type": "handoff",
+          "subject": "REQ handoff run-1779327025358",
+          "body": "Requirements handoff ready",
+          "runId": "run-1779327025358",
+          "artifactUrl": "/runs/run-1779327025358/handoff-req-to-be.md",
+          "read": false
+        },
+        {
+          "id": "mail-1779327037829-c3b3b6b82f33b",
+          "ts": "2026-05-21T01:30:37.829Z",
+          "from": "requirements",
+          "to": "backend",
+          "type": "handoff",
+          "subject": "REQ handoff run-1779327035123",
+          "body": "Requirements handoff ready",
+          "runId": "run-1779327035123",
+          "artifactUrl": "/runs/run-1779327035123/handoff-req-to-be.md",
+          "read": false
+        }
+      ]
+    },
+    "backend": {
+      "inbox": [
+        {
+          "id": "mail-1779327016059-013facea69666",
+          "ts": "2026-05-21T01:30:16.059Z",
+          "from": "requirements",
+          "to": "backend",
+          "type": "handoff",
+          "subject": "REQ handoff run-1779327013354",
+          "body": "Requirements handoff ready",
+          "runId": "run-1779327013354",
+          "artifactUrl": "/runs/run-1779327013354/handoff-req-to-be.md",
+          "read": false
+        },
+        {
+          "id": "mail-1779327025827-5d3dae4dd795d",
+          "ts": "2026-05-21T01:30:25.827Z",
+          "from": "requirements",
+          "to": "backend",
+          "type": "handoff",
+          "subject": "REQ handoff run-1779327023125",
+          "body": "Requirements handoff ready",
+          "runId": "run-1779327023125",
+          "artifactUrl": "/runs/run-1779327023125/handoff-req-to-be.md",
+          "read": false
+        },
+        {
+          "id": "mail-1779327028062-e3bec651f39e8",
+          "ts": "2026-05-21T01:30:28.062Z",
+          "from": "requirements",
+          "to": "backend",
+          "type": "handoff",
+          "subject": "REQ handoff run-1779327025358",
+          "body": "Requirements handoff ready",
+          "runId": "run-1779327025358",
+          "artifactUrl": "/runs/run-1779327025358/handoff-req-to-be.md",
+          "read": false
+        },
+        {
+          "id": "mail-1779327037829-c3b3b6b82f33b",
+          "ts": "2026-05-21T01:30:37.829Z",
+          "from": "requirements",
+          "to": "backend",
+          "type": "handoff",
+          "subject": "REQ handoff run-1779327035123",
+          "body": "Requirements handoff ready",
+          "runId": "run-1779327035123",
+          "artifactUrl": "/runs/run-1779327035123/handoff-req-to-be.md",
+          "read": false
+        }
+      ],
+      "outbox": [
+        {
+          "id": "mail-1779327019558-c303a71622325",
+          "ts": "2026-05-21T01:30:19.558Z",
+          "from": "backend",
+          "to": "qa",
+          "type": "handoff",
+          "subject": "BE handoff run-1779327013354",
+          "body": "Backend handoff ready",
+          "runId": "run-1779327013354",
+          "artifactUrl": "/runs/run-1779327013354/handoff-be-to-qa.md",
+          "read": false
+        },
+        {
+          "id": "mail-1779327029327-861c1b561394c",
+          "ts": "2026-05-21T01:30:29.327Z",
+          "from": "backend",
+          "to": "qa",
+          "type": "handoff",
+          "subject": "BE handoff run-1779327023125",
+          "body": "Backend handoff ready",
+          "runId": "run-1779327023125",
+          "artifactUrl": "/runs/run-1779327023125/handoff-be-to-qa.md",
+          "read": false
+        },
+        {
+          "id": "mail-1779327031559-86b9d76340229",
+          "ts": "2026-05-21T01:30:31.559Z",
+          "from": "backend",
+          "to": "qa",
+          "type": "handoff",
+          "subject": "BE handoff run-1779327025358",
+          "body": "Backend handoff ready",
+          "runId": "run-1779327025358",
+          "artifactUrl": "/runs/run-1779327025358/handoff-be-to-qa.md",
+          "read": false
+        },
+        {
+          "id": "mail-1779327041331-14c791a979899",
+          "ts": "2026-05-21T01:30:41.331Z",
+          "from": "backend",
+          "to": "qa",
+          "type": "handoff",
+          "subject": "BE handoff run-1779327035123",
+          "body": "Backend handoff ready",
+          "runId": "run-1779327035123",
+          "artifactUrl": "/runs/run-1779327035123/handoff-be-to-qa.md",
+          "read": false
+        }
+      ]
+    },
+    "qa": {
+      "inbox": [
+        {
+          "id": "mail-1779327019558-c303a71622325",
+          "ts": "2026-05-21T01:30:19.558Z",
+          "from": "backend",
+          "to": "qa",
+          "type": "handoff",
+          "subject": "BE handoff run-1779327013354",
+          "body": "Backend handoff ready",
+          "runId": "run-1779327013354",
+          "artifactUrl": "/runs/run-1779327013354/handoff-be-to-qa.md",
+          "read": false
+        },
+        {
+          "id": "mail-1779327029327-861c1b561394c",
+          "ts": "2026-05-21T01:30:29.327Z",
+          "from": "backend",
+          "to": "qa",
+          "type": "handoff",
+          "subject": "BE handoff run-1779327023125",
+          "body": "Backend handoff ready",
+          "runId": "run-1779327023125",
+          "artifactUrl": "/runs/run-1779327023125/handoff-be-to-qa.md",
+          "read": false
+        },
+        {
+          "id": "mail-1779327031559-86b9d76340229",
+          "ts": "2026-05-21T01:30:31.559Z",
+          "from": "backend",
+          "to": "qa",
+          "type": "handoff",
+          "subject": "BE handoff run-1779327025358",
+          "body": "Backend handoff ready",
+          "runId": "run-1779327025358",
+          "artifactUrl": "/runs/run-1779327025358/handoff-be-to-qa.md",
+          "read": false
+        },
+        {
+          "id": "mail-1779327041331-14c791a979899",
+          "ts": "2026-05-21T01:30:41.331Z",
+          "from": "backend",
+          "to": "qa",
+          "type": "handoff",
+          "subject": "BE handoff run-1779327035123",
+          "body": "Backend handoff ready",
+          "runId": "run-1779327035123",
+          "artifactUrl": "/runs/run-1779327035123/handoff-be-to-qa.md",
+          "read": false
+        }
+      ],
+      "outbox": [
+        {
+          "id": "mail-1779327023160-170bcedb1d776",
+          "ts": "2026-05-21T01:30:23.160Z",
+          "from": "qa",
+          "to": "pm",
+          "type": "review",
+          "subject": "QA review run-1779327013354",
+          "body": "QA PASS, ready for PM decision",
+          "runId": "run-1779327013354",
+          "artifactUrl": "/runs/run-1779327013354/qa-report.md",
+          "read": false
+        },
+        {
+          "id": "mail-1779327032926-62857d4dd572b",
+          "ts": "2026-05-21T01:30:32.926Z",
+          "from": "qa",
+          "to": "pm",
+          "type": "review",
+          "subject": "QA review run-1779327023125",
+          "body": "QA PASS, ready for PM decision",
+          "runId": "run-1779327023125",
+          "artifactUrl": "/runs/run-1779327023125/qa-report.md",
+          "read": false
+        },
+        {
+          "id": "mail-1779327035161-3d3343bdfa773",
+          "ts": "2026-05-21T01:30:35.161Z",
+          "from": "qa",
+          "to": "pm",
+          "type": "review",
+          "subject": "QA review run-1779327025358",
+          "body": "QA PASS, ready for PM decision",
+          "runId": "run-1779327025358",
+          "artifactUrl": "/runs/run-1779327025358/qa-report.md",
+          "read": false
+        },
+        {
+          "id": "mail-1779327044931-96a4383547cab",
+          "ts": "2026-05-21T01:30:44.931Z",
+          "from": "qa",
+          "to": "pm",
+          "type": "review",
+          "subject": "QA review run-1779327035123",
+          "body": "QA PASS, ready for PM decision",
+          "runId": "run-1779327035123",
+          "artifactUrl": "/runs/run-1779327035123/qa-report.md",
+          "read": false
+        }
+      ]
+    }
+  },
+  "reviews": [],
+  "audit": [],
+  "runs": [
+    {
+      "runId": "run-1779327035123",
+      "ts": "2026-05-21T01:30:35.127Z",
+      "task": "UI-triggered full acceptance fail/retry",
+      "mode": "fail-at-qa",
+      "status": "done",
+      "phase": "completed",
+      "path": "/runs/run-1779327035123",
+      "artifacts": [
+        "/runs/run-1779327035123/timeline.log",
+        "/runs/run-1779327035123/requirements.log",
+        "/runs/run-1779327035123/backend.log",
+        "/runs/run-1779327035123/qa.log"
+      ]
+    },
+    {
+      "runId": "run-1779327025358",
+      "ts": "2026-05-21T01:30:25.360Z",
+      "task": "UI-triggered full acceptance fail/retry",
+      "mode": "fail-at-qa",
+      "status": "done",
+      "phase": "completed",
+      "path": "/runs/run-1779327025358",
+      "artifacts": [
+        "/runs/run-1779327025358/timeline.log",
+        "/runs/run-1779327025358/requirements.log",
+        "/runs/run-1779327025358/backend.log",
+        "/runs/run-1779327025358/qa.log"
+      ]
+    },
+    {
+      "runId": "run-1779327023125",
+      "ts": "2026-05-21T01:30:23.126Z",
+      "task": "UI-triggered full acceptance normal",
+      "mode": "normal",
+      "status": "done",
+      "phase": "completed",
+      "path": "/runs/run-1779327023125",
+      "artifacts": [
+        "/runs/run-1779327023125/timeline.log",
+        "/runs/run-1779327023125/requirements.log",
+        "/runs/run-1779327023125/backend.log",
+        "/runs/run-1779327023125/qa.log"
+      ]
+    },
+    {
+      "runId": "run-1779327013354",
+      "ts": "2026-05-21T01:30:13.357Z",
+      "task": "UI-triggered full acceptance normal",
+      "mode": "normal",
+      "status": "done",
+      "phase": "completed",
+      "path": "/runs/run-1779327013354",
+      "artifacts": [
+        "/runs/run-1779327013354/timeline.log",
+        "/runs/run-1779327013354/requirements.log",
+        "/runs/run-1779327013354/backend.log",
+        "/runs/run-1779327013354/qa.log"
+      ]
+    }
+  ]
+}

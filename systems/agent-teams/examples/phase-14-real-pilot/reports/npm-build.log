@@ -1,0 +1,4 @@
+
+> phase-14-real-pilot-issue-tracker@0.1.0 build
+> node --check src/issue-tracker.js && node --check tests/issue-tracker.test.js
+
