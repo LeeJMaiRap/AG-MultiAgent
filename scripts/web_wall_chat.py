@@ -46,6 +46,78 @@ BASE_DIR = Path(__file__).parent.parent.resolve()
 SUBAGENTS_DIR = BASE_DIR / "subagents"
 import time
 
+def parse_project_brief_and_name(text: str) -> (str, str):
+    """
+    Parse the project brief (description) and folder name (project_name) from user chat command.
+    Example text: 'Hãy khởi chạy dự án website bán hàng lưu ở folder shop-online'
+    Output: ('website bán hàng', 'shop-online')
+    """
+    import re
+    # Clean text
+    text_clean = text.strip()
+    
+    # 1. Try to extract folder name/project name from common patterns
+    folder_patterns = [
+        r'(?:tên là|tên|folder|thư mục|lưu ở|lưu tại|lưu trong|directory)\s*(?:là\s+)?[:"\'`]?([a-zA-Z0-9_-]+)[:"\'`]?',
+        r'([a-zA-Z0-9_-]+)\s*(?:folder|thư mục|lưu ở|lưu tại|lưu trong|directory)'
+    ]
+    
+    folder_name = None
+    for pattern in folder_patterns:
+        match = re.search(pattern, text_clean, re.IGNORECASE)
+        if match:
+            folder_name = match.group(1)
+            break
+            
+    # 2. Extract brief/description
+    # We want to remove the creation command and the folder part to get a clean brief
+    brief = text_clean
+    
+    # Remove initiation keywords
+    init_kws = ["Hãy khởi chạy dự án", "khởi chạy dự án", "Hãy tạo dự án", "tạo dự án mới", "tạo dự án", "khởi tạo dự án", "xây dựng ứng dụng", "xây dựng website", "xây dựng app", "build new app", "build new project", "create new project", "start project", "tạo mới", "khởi tạo"]
+    for kw in init_kws:
+        if brief.lower().startswith(kw.lower()):
+            brief = brief[len(kw):].strip()
+            break
+            
+    # If the folder name was found in the string, let's remove the segment containing it from the brief
+    if folder_name:
+        # e.g., remove 'lưu ở folder shop-online' or 'có tên là shop-online'
+        remove_patterns = [
+            r'(?:có\s+)?(?:tên là|tên|folder|thư mục|lưu ở|lưu tại|lưu trong|directory)\s*(?:là\s+)?[:"\'`]?' + re.escape(folder_name) + r'[:"\'`]?',
+            r'[:"\'`]?' + re.escape(folder_name) + r'[:"\'`]?\s*(?:folder|thư mục|lưu ở|lưu tại|lưu trong|directory)'
+        ]
+        for rp in remove_patterns:
+            brief = re.sub(rp, '', brief, flags=re.IGNORECASE).strip()
+            
+    # Clean up brief: strip punctuation, trailing/leading spaces, connectors like "có", "với" at the end
+    brief = re.sub(r'^(?:là|cho|về)\s+', '', brief, flags=re.IGNORECASE).strip()
+    brief = re.sub(r'\s+(?:lưu|tên|tại)$', '', brief, flags=re.IGNORECASE).strip()
+    brief = brief.strip(",.!?\"' ")
+    
+    # Fallback if brief is empty
+    if not brief:
+        brief = "Dự án mới tạo qua Chat"
+        
+    # If folder name was not specified, generate a clean slug from the brief
+    if not folder_name:
+        # Convert brief to lowercase, remove accents, replace spaces with dashes
+        # A simple slugify helper
+        slug = brief.lower()
+        # Remove accents
+        import unicodedata
+        slug = unicodedata.normalize('NFKD', slug).encode('ascii', 'ignore').decode('utf-8')
+        slug = re.sub(r'[^a-z0-9\s-]', '', slug)
+        slug = re.sub(r'[\s-]+', '-', slug).strip('-')
+        folder_name = slug if slug else "web-project"
+        
+    # Standardize folder_name
+    folder_name = "".join(c for c in folder_name if c.isalnum() or c in "-_").strip()
+    if not folder_name:
+        folder_name = "web-project"
+        
+    return brief, folder_name
+
 # ---------------------------------------------------------------------------
 # WebSocket Connection Manager
 # ---------------------------------------------------------------------------
@@ -102,6 +174,22 @@ async def set_mode(body: dict):
     GLOBAL_MOCK = mock
     print(f"[Mode Switch] GLOBAL_MOCK set to: {GLOBAL_MOCK}")
     return {"ok": True, "mock": GLOBAL_MOCK}
+
+@app.get("/api/leej_ceo/mode")
+async def get_leej_ceo_mode():
+    return {"mode": registry.leej_ceo_mode}
+
+@app.post("/api/leej_ceo/mode")
+async def set_leej_ceo_mode(body: dict):
+    mode = body.get("mode", "assistant").strip().lower()
+    if mode not in ("assistant", "ceo"):
+        return {"error": "Invalid mode. Must be 'assistant' or 'ceo'."}
+    old_mode = registry.leej_ceo_mode
+    registry.leej_ceo_mode = mode
+    print(f"[LeeJ CEO Mode] Changed from '{old_mode}' to '{mode}'")
+    # Broadcast mode change event to all connected WebSocket clients
+    _on_orchestrator_event("leej_ceo_mode_change", {"mode": mode})
+    return {"ok": True, "mode": mode}
 
 @app.post("/api/agents/{agent_id}/chat")
 async def chat_to_agent(agent_id: str, body: dict):
@@ -752,7 +840,7 @@ def process_chat(agent_id: str, text: str):
             return
 
         # Improved Intent Parsing: Only start pipeline on explicit creation commands
-        creation_keywords = ["tạo mới", "khởi tạo", "create new", "start project", "bắt đầu dự án", "tạo dự án", "xây dựng ứng dụng", "xây dựng website", "xây dựng app", "build new app", "build new project"]
+        creation_keywords = ["tạo mới", "khởi tạo", "create new", "start project", "bắt đầu dự án", "tạo dự án", "xây dựng ứng dụng", "xây dựng website", "xây dựng app", "build new app", "build new project", "khởi chạy dự án"]
         is_creation_intent = any(ckw in text_lower for ckw in creation_keywords) or (
             ("tạo" in text_lower or "create" in text_lower or "build" in text_lower) and 
             any(wk in text_lower for wk in ["dự án", "project", "app", "website", "mvp"])
@@ -766,39 +854,56 @@ def process_chat(agent_id: str, text: str):
                     "chat"
                 )
                 return
+            
+            # Parse brief and project_name from user command
+            brief, project_name = parse_project_brief_and_name(text)
+            
+            # Auto-switch to CEO mode
+            registry.leej_ceo_mode = "ceo"
+            _on_orchestrator_event("leej_ceo_mode_change", {"mode": "ceo"})
+            
+            # Set current project
+            registry.current_project = project_name
                 
             registry.add_agent_message(
                 "main-agent", "agent", 
-                f"Tôi là LeeJ CEO. Đã nhận diện yêu cầu khởi tạo dự án: '{text[:100]}...'. Đang chuyển tiếp cho PM Agent để lập kế hoạch...", 
+                f"🎯 **[PROJECT CEO Mode Activated]**\n\nTôi là LeeJ CEO. Đã nhận diện yêu cầu khởi tạo dự án.\n- **Brief:** {brief}\n- **Thư mục:** `{project_name}`\n\nĐang chuyển tiếp cho PM Agent để lập kế hoạch...", 
                 "chat"
             )
             
-            # Start pipeline in background
+            # Start pipeline in background with parsed brief and project_name
             def _run():
-                run_pipeline(text, registry.current_project, mock=GLOBAL_MOCK)
+                run_pipeline(brief, project_name, mock=GLOBAL_MOCK)
             thread = threading.Thread(target=_run, daemon=True)
             thread.start()
             return
             
-        # Casual conversation with LeeJ CEO - Load Shared Truth Context if active
+        # Casual conversation with LeeJ CEO - Route based on Dual-State mode
         registry.set_agent_state("main-agent", AgentState.WORKING)
-        project_ctx = ""
-        if registry.is_pipeline_active():
+        
+        # Build system prompt based on current mode
+        if registry.leej_ceo_mode == "ceo":
             project_ctx = f"\n\nBối cảnh dự án hiện tại (Shared Truth Context):\n{get_global_project_context()}"
-
-        system_prompt = (
-            "Bạn là LeeJ CEO, bộ não chỉ huy tối cao và trợ lý AI điều phối của hệ thống MTA. "
-            "Hãy trò chuyện thân thiện, chuyên nghiệp hoàn toàn bằng Tiếng Việt. Bạn có quyền tiếp cận toàn bộ bối cảnh dự án thời gian thực. "
-            "Khi trả lời, hãy sử dụng bối cảnh này để giải thích hoặc báo cáo chính xác các thắc mắc của người dùng về tiến độ, cấu trúc file, hoặc code của dự án."
-            f"{project_ctx}"
-        )
+            system_prompt = (
+                "Bạn là LeeJ CEO, bộ não chỉ huy tối cao và trợ lý AI điều phối của hệ thống MTA. "
+                "Bạn đang ở chế độ PROJECT CEO: mọi câu trả lời đều gắn liền với bối cảnh dự án thời gian thực. "
+                "Hãy trò chuyện thân thiện, chuyên nghiệp hoàn toàn bằng Tiếng Việt. Bạn có quyền tiếp cận toàn bộ bối cảnh dự án thời gian thực. "
+                "Khi trả lời, hãy sử dụng bối cảnh này để giải thích hoặc báo cáo chính xác các thắc mắc của người dùng về tiến độ, cấu trúc file, hoặc code của dự án."
+                f"{project_ctx}"
+            )
+        else:
+            system_prompt = (
+                "Bạn là LeeJ CEO, trợ lý AI thông minh và thân thiện. "
+                "Bạn đang ở chế độ AI ASSISTANT: trò chuyện tự do, không can thiệp pipeline, không chuyển câu hỏi sang PM Agent. "
+                "Hãy trò chuyện bằng Tiếng Việt, hỗ trợ người dùng với mọi câu hỏi chung về lập trình, công nghệ, hoặc cuộc sống."
+            )
 
         if GLOBAL_MOCK:
             time.sleep(0.8)
-            if project_ctx:
-                reply = f"Chào bạn! Tôi là LeeJ CEO. Dự án '{registry.current_project}' đang hoạt động. Tôi đã nạp Shared Truth Context để sẵn sàng trả lời các câu hỏi về file, cấu trúc hoặc mã nguồn của bạn. Bạn muốn hỏi về phần nào?"
+            if registry.leej_ceo_mode == "ceo":
+                reply = f"Chào bạn! Tôi là LeeJ CEO đang ở chế độ 🎯 **PROJECT CEO**. Dự án '{registry.current_project}' đang hoạt động. Tôi đã nạp Shared Truth Context để sẵn sàng trả lời các câu hỏi về file, cấu trúc hoặc mã nguồn của bạn. Bạn muốn hỏi về phần nào?"
             else:
-                reply = "Chào bạn! Tôi là LeeJ CEO. Rất vui được hỗ trợ bạn. Các Agent con đang ở trạng thái NGHỈ (Idle) để tiết kiệm token. Bạn có thể trò chuyện với tôi hoặc ra lệnh khởi tạo dự án mới (ví dụ: 'tạo dự án website bán hàng') để kích hoạt Web-Team nhé!"
+                reply = "Chào bạn! Tôi là LeeJ CEO đang ở chế độ 💬 **AI ASSISTANT**. Rất vui được hỗ trợ bạn với mọi câu hỏi. Bạn có thể chuyển sang chế độ 🎯 PROJECT CEO bằng nút gạt phía trên hoặc ra lệnh khởi tạo dự án mới nhé!"
             registry.add_agent_message("main-agent", "agent", reply, "chat")
         else:
             try:
@@ -1431,6 +1536,105 @@ body {
 .tree-file:hover { background: var(--surface2); color: var(--accent); }
 .tree-file::before { content: '📄 '; opacity: 0.7; }
 
+/* --- Accordion Project Sidebar --- */
+.accordion-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    padding: 2px 0;
+}
+.accordion-toggle .accordion-arrow {
+    display: inline-block;
+    font-size: 10px;
+    transition: transform 0.25s ease;
+    color: var(--text-dim);
+    width: 12px;
+    text-align: center;
+    flex-shrink: 0;
+}
+.accordion-toggle .accordion-arrow.expanded {
+    transform: rotate(90deg);
+}
+.accordion-files-container {
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease, margin 0.25s ease;
+    margin-top: 0;
+}
+.accordion-files-container.expanded {
+    max-height: 600px;
+    opacity: 1;
+    margin-top: 6px;
+}
+
+/* --- Dual-State Toggle Switch --- */
+.dual-state-container {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px;
+    margin-left: auto;
+    background: var(--surface);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    transition: all 0.3s;
+}
+.dual-state-container.visible {
+    display: flex;
+}
+.dual-state-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+    white-space: nowrap;
+    transition: color 0.3s;
+}
+.dual-state-label.active-label {
+    color: var(--text);
+}
+.toggle-switch {
+    position: relative;
+    width: 44px;
+    height: 22px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.toggle-slider {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(108, 99, 255, 0.25);
+    border-radius: 22px;
+    transition: background 0.3s;
+    border: 1px solid var(--border);
+}
+.toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    left: 2px;
+    bottom: 2px;
+    background: var(--text-dim);
+    border-radius: 50%;
+    transition: transform 0.3s, background 0.3s;
+}
+.toggle-switch input:checked + .toggle-slider {
+    background: linear-gradient(135deg, var(--accent), #8b5cf6);
+    border-color: var(--accent);
+}
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(22px);
+    background: #fff;
+}
+
 .modal-overlay {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0,0,0,0.6); z-index: 1000;
@@ -1497,6 +1701,14 @@ body {
                 <p id="chat-agent-role">Primary AI Assistant &amp; Coordinator | cx/gpt-5.5</p>
             </div>
             <span id="chat-permission" class="permission-badge safe">&#128275; Full Access</span>
+            <div id="dual-state-toggle" class="dual-state-container">
+                <span class="dual-state-label" id="label-assistant">💬 Assistant</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="mode-toggle-input" onchange="toggleLeejCeoMode(this.checked)" />
+                    <span class="toggle-slider"></span>
+                </label>
+                <span class="dual-state-label" id="label-ceo">🎯 CEO</span>
+            </div>
         </div>
         
         <!-- Q&A Bridge Panel (Fallback) -->
@@ -1558,6 +1770,95 @@ let currentProject = 'web-project';
 let qaAgentIdPending = null;
 let qaQuestionPending = '';
 
+// Accordion Project Sidebar state
+const expandedProjects = new Set();
+
+// Dual-State LeeJ CEO mode
+let leejCeoMode = 'assistant';
+
+// Dynamic toggle switch functions for LeeJ CEO Dual-State Mode
+function updateDualStateUI() {
+    const toggleContainer = document.getElementById('dual-state-toggle');
+    const toggleInput = document.getElementById('mode-toggle-input');
+    const labelAssistant = document.getElementById('label-assistant');
+    const labelCeo = document.getElementById('label-ceo');
+
+    if (toggleContainer) {
+        if (activeAgent === 'main-agent') {
+            toggleContainer.classList.add('visible');
+        } else {
+            toggleContainer.classList.remove('visible');
+        }
+    }
+
+    if (toggleInput) {
+        toggleInput.checked = (leejCeoMode === 'ceo');
+    }
+
+    if (labelAssistant && labelCeo) {
+        if (leejCeoMode === 'ceo') {
+            labelAssistant.classList.remove('active-label');
+            labelCeo.classList.add('active-label');
+        } else {
+            labelAssistant.classList.add('active-label');
+            labelCeo.classList.remove('active-label');
+        }
+    }
+}
+
+async function toggleLeejCeoMode(isChecked) {
+    const newMode = isChecked ? 'ceo' : 'assistant';
+    leejCeoMode = newMode;
+    updateDualStateUI();
+    
+    try {
+        const resp = await fetch('/api/leej_ceo/mode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: newMode })
+        });
+        const data = await resp.json();
+        if (data.error) {
+            console.error('Failed to update CEO mode on backend:', data.error);
+        }
+    } catch (e) {
+        console.error('Failed to update CEO mode:', e);
+    }
+}
+
+async function fetchCeoMode() {
+    try {
+        const resp = await fetch('/api/leej_ceo/mode');
+        const data = await resp.json();
+        if (data.mode) {
+            leejCeoMode = data.mode;
+            updateDualStateUI();
+        }
+    } catch (e) {
+        console.error('Failed to fetch CEO mode:', e);
+    }
+}
+
+function toggleProjectAccordion(name, cardEl) {
+    if (expandedProjects.has(name)) {
+        expandedProjects.delete(name);
+    } else {
+        expandedProjects.add(name);
+    }
+    
+    // Toggle classes on the element immediately for zero-lag UI response
+    if (cardEl) {
+        const arrow = cardEl.querySelector('.accordion-arrow');
+        const container = cardEl.querySelector('.accordion-files-container');
+        if (arrow) {
+            arrow.classList.toggle('expanded', expandedProjects.has(name));
+        }
+        if (container) {
+            container.classList.toggle('expanded', expandedProjects.has(name));
+        }
+    }
+}
+
 function connect() {
     ws = new WebSocket(WS_URL);
     ws.onopen = () => {
@@ -1608,6 +1909,10 @@ function handleEvent(msg) {
             tab.style.background = 'rgba(108,99,255,0.15)';
             setTimeout(() => { tab.style.background = ''; }, 1500);
         }
+    }
+    else if (msg.event === 'leej_ceo_mode_change') {
+        leejCeoMode = msg.mode || 'assistant';
+        updateDualStateUI();
     }
     else if (msg.event === 'message_stream') {
         const id = msg.agent_id;
@@ -1724,6 +2029,10 @@ function renderTabs() {
 function selectAgent(id) {
     activeAgent = id;
     renderTabs();
+    
+    // Toggle dual-state view container based on agent ID
+    updateDualStateUI();
+    
     const a = agents.find(x => x.agent_id === id);
     if (!a) return;
     
@@ -1986,28 +2295,33 @@ async function loadProjects() {
             html += `<div class="project-list-title">${status}</div>`;
             list.forEach(p => {
                 const isActive = p.project_name === currentProject ? 'active-project' : '';
+                const isExpanded = expandedProjects.has(p.project_name);
                 const dateStr = p.created_at ? new Date(p.created_at).toLocaleDateString('vi-VN', {
                     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
                 }) : '';
+                
                 let filesHtml = '';
                 if (p.files && p.files.length > 0) {
-                    filesHtml = `<div style="margin-top: 8px;">`;
                     p.files.forEach(file => {
                         const relPath = `${status.toLowerCase()}/${p.project_name}/${file}`;
                         filesHtml += `<div class="tree-file" onclick="openFile(event, '${relPath}')">${file}</div>`;
                     });
-                    filesHtml += `</div>`;
+                } else {
+                    filesHtml = `<div style="font-size:10px; color:var(--text-dim); padding: 4px 12px; font-style: italic;">Không có file nào</div>`;
                 }
 
                 html += `
-                    <div class="project-card ${isActive}" onclick="loadProject('${p.project_name}')">
-                        <div class="card-header">
+                    <div class="project-card ${isActive}" id="project-card-${p.project_name}" onclick="loadProject('${p.project_name}', this)">
+                        <div class="card-header accordion-toggle">
+                            <span class="accordion-arrow ${isExpanded ? 'expanded' : ''}">▶</span>
                             <span class="proj-name">${p.project_name}</span>
                             <span class="status-badge ${status.toLowerCase()}">${status}</span>
                         </div>
                         <div class="proj-desc">${escapeHtml(p.description || '')}</div>
                         <div class="proj-meta">${dateStr}</div>
-                        ${filesHtml}
+                        <div class="accordion-files-container ${isExpanded ? 'expanded' : ''}">
+                            ${filesHtml}
+                        </div>
                     </div>
                 `;
             });
@@ -2091,7 +2405,10 @@ async function deleteFile() {
     }
 }
 
-async function loadProject(name) {
+async function loadProject(name, cardEl) {
+    // Toggle accordion state locally for immediate UX transition
+    toggleProjectAccordion(name, cardEl);
+    
     try {
         const resp = await fetch(`/api/project/load?name=${name}`);
         const data = await resp.json();
@@ -2188,6 +2505,7 @@ function initTheme() {
 // Initialize theme and socket connection
 initTheme();
 connect();
+fetchCeoMode();
 </script>
 </body>
 </html>"""

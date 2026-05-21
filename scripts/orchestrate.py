@@ -200,6 +200,7 @@ class OrchestratorRegistry:
         self._listeners: List[Callable] = []
         self.current_project = "web-project"
         self.current_brief = ""
+        self.leej_ceo_mode = "assistant"  # Chế độ mặc định: "assistant" hoặc "ceo"
         self.mock_mode = True
         self._register_default_agents()
 
@@ -478,12 +479,19 @@ def run_agent(agent_name: str, task_desc: str, mock: bool = True,
             # Reset event and block
             PM_ANSWER_EVENT.clear()
             
-            # Send question to LeeJ CEO for user to see, append dynamic Q&A Bridge token
-            registry.add_agent_message(
-                "main-agent", "agent",
-                f"❓ **[Q&A Bridge] {registry.agents[agent_name].display_name} đang hỏi:**\n\n{question}\n\n[QA_BRIDGE_QUESTION:{agent_name}]",
-                "chat"
-            )
+            # Send question to LeeJ CEO for user to see, append dynamic Q&A Bridge token based on mode
+            if registry.leej_ceo_mode == "ceo":
+                registry.add_agent_message(
+                    "main-agent", "agent",
+                    f"❓ **[Q&A Bridge] {registry.agents[agent_name].display_name} đang hỏi:**\n\n{question}\n\n[QA_BRIDGE_QUESTION:{agent_name}]",
+                    "chat"
+                )
+            else:
+                registry.add_agent_message(
+                    "main-agent", "agent",
+                    f"❓ **{registry.agents[agent_name].display_name} đang có câu hỏi:**\n\n{question}",
+                    "chat"
+                )
             
             # Add message from the agent itself to show in its tab
             registry.add_agent_message(agent_name, "agent", f"**{qa_token}** {question}", "chat")
