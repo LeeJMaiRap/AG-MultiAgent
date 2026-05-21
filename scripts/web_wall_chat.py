@@ -16,6 +16,7 @@ import threading
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict
+import re
 
 # Fix encoding for Windows console
 if sys.stdout.encoding != 'utf-8':
@@ -466,6 +467,92 @@ def generate_streaming_chat(agent_id: str, system_prompt: str, user_text: str, t
                 raise RuntimeError(f"Codex Connection Failed: {e}{err_detail}")
 
 
+def execute_agent_tools(agent_id: str, text: str) -> tuple[str, bool]:
+    did_execute = False
+    outputs = []
+    
+    # 1. Parse tool_write_file (DOTALL matches newlines)
+    write_pattern = re.compile(r'<tool_write_file\s+path="([^"]+)"\s*>(.*?)</tool_write_file>', re.DOTALL)
+    for path, content in write_pattern.findall(text):
+        did_execute = True
+        full_path = os.path.abspath(os.path.join(PROJECTS_ROOT, path))
+        if not is_safe_path(full_path):
+            outputs.append(f"Error (write_file): 403 Forbidden - Path traversal detected for path: {path}")
+            continue
+        try:
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            with open(full_path, "w", encoding="utf-8") as f:
+                f.write(content)
+            outputs.append(f"Success: File successfully written to projects/{path}")
+        except Exception as e:
+            outputs.append(f"Error (write_file): {e}")
+
+    # 2. Parse tool_read_file
+    read_pattern = re.compile(r'<tool_read_file\s+path="([^"]+)"\s*>(.*?)</tool_read_file>|<tool_read_file\s+path="([^"]+)"\s*/>', re.DOTALL)
+    for match in read_pattern.findall(text):
+        path = match[0] if match[0] else match[2]
+        if not path:
+            continue
+        did_execute = True
+        full_path = os.path.abspath(os.path.join(PROJECTS_ROOT, path))
+        if not is_safe_path(full_path):
+            outputs.append(f"Error (read_file): 403 Forbidden - Path traversal detected for path: {path}")
+            continue
+        if not os.path.exists(full_path):
+            outputs.append(f"Error (read_file): File not found at projects/{path}")
+            continue
+        try:
+            with open(full_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            outputs.append(f"Success (read_file):\n```\n{content}\n```")
+        except Exception as e:
+            outputs.append(f"Error (read_file): {e}")
+
+    # 3. Parse tool_delete_file
+    delete_pattern = re.compile(r'<tool_delete_file\s+path="([^"]+)"\s*>(.*?)</tool_delete_file>|<tool_delete_file\s+path="([^"]+)"\s*/>', re.DOTALL)
+    for match in delete_pattern.findall(text):
+        path = match[0] if match[0] else match[2]
+        if not path:
+            continue
+        did_execute = True
+        full_path = os.path.abspath(os.path.join(PROJECTS_ROOT, path))
+        if not is_safe_path(full_path):
+            outputs.append(f"Error (delete_file): 403 Forbidden - Path traversal detected for path: {path}")
+            continue
+        if not os.path.exists(full_path):
+            outputs.append(f"Error (delete_file): File not found at projects/{path}")
+            continue
+        try:
+            os.remove(full_path)
+            outputs.append(f"Success: File projects/{path} has been deleted.")
+        except Exception as e:
+            outputs.append(f"Error (delete_file): {e}")
+
+    # 4. Parse tool_execute_command
+    exec_pattern = re.compile(r'<tool_execute_command\s*>(.*?)</tool_execute_command>', re.DOTALL)
+    for cmd in exec_pattern.findall(text):
+        cmd = cmd.strip()
+        if not cmd:
+            continue
+        did_execute = True
+        if not check_permission(agent_id, cmd):
+            outputs.append(f"Error (execute_command): Permission Denied - Command '{cmd}' was blocked by safety barrier.")
+            continue
+        try:
+            import subprocess
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=120)
+            stdout = res.stdout.strip()
+            stderr = res.stderr.strip()
+            status = f"Exit Code: {res.returncode}"
+            outputs.append(f"Success (execute_command):\nCommand: {cmd}\n{status}\nStdout:\n{stdout}\nStderr:\n{stderr}")
+        except subprocess.TimeoutExpired:
+            outputs.append(f"Error (execute_command): Command '{cmd}' timed out after 120 seconds.")
+        except Exception as e:
+            outputs.append(f"Error (execute_command): {e}")
+
+    return "\n\n---\n\n".join(outputs), did_execute
+
+
 def process_chat(agent_id: str, text: str):
     global GLOBAL_MOCK
     
@@ -573,34 +660,72 @@ def process_chat(agent_id: str, text: str):
     reply = ""
     if GLOBAL_MOCK:
         time.sleep(0.8)
-        mock_responses = {
-            "pm-orchestrator": "Tôi là PM Agent. Tôi chịu trách nhiệm lập kế hoạch dự án, phân rã nhiệm vụ và điều phối toàn bộ Web-Team hoạt động song song.",
-            "product-agent": "Tôi là Product Agent. Tôi chuyên phân tích yêu cầu từ bản mô tả brief của khách hàng để xuất ra tài liệu PRD hoàn chỉnh.",
-            "architecture-agent": "Tôi là Architecture Agent. Tôi chuyên thiết kế cấu trúc thư mục, định nghĩa API contract và sơ đồ dữ liệu cho dự án.",
-            "frontend-agent": "Tôi là Frontend Agent. Tôi tạo ra giao diện người dùng đẹp mắt, responsive và áp dụng các hiệu ứng chuyển động mượt mà.",
-            "backend-agent": "Tôi là Backend Agent. Tôi phụ trách xây dựng cơ sở dữ liệu, viết logic nghiệp vụ xử lý API và tích hợp với Frontend.",
-            "qa-agent": "Tôi là QA Agent. Tôi tự động thiết lập bộ test case, chạy thử nghiệm hệ thống và rà soát lỗi bảo mật trước khi bàn giao dự án."
-        }
-        reply = mock_responses.get(agent_id, f"Tôi là {registry.agents[agent_id].display_name}. Rất vui được nhận tin nhắn từ bạn!")
         
-        # Simulate scope approval in Mock Mode if user gives positive feedback
-        if agent_id == "pm-orchestrator":
-            text_lower = text.lower()
-            if any(kw in text_lower for kw in ["chốt", "đồng ý", "ok", "duyệt", "tiến hành đi", "bắt đầu đi", "let's go", "approve", "go ahead"]):
-                reply += "\n\n[SCOPE_APPROVED] Tuyệt vời! Kế hoạch đã được phê duyệt. Tôi sẽ kích hoạt pha thực thi cho dự án ngay lập tức."
-                
-        registry.add_agent_message(agent_id, "agent", reply, "chat")
-    else:
-        try:
-            # Get agent system prompt
-            prompt_path = SUBAGENTS_DIR / f"{agent_id}.md"
-            prompt = prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else "Bạn là một AI Agent trong hệ thống Multi-Agent."
-            system_prompt = prompt + "\n\nHãy phản hồi ngắn gọn bằng tiếng Việt theo đúng vai trò và nhiệm vụ của bạn."
-            reply = generate_streaming_chat(agent_id, system_prompt, text, temperature=0.3)
-        except Exception as e:
-            reply = f"Lỗi kết nối Codex Gateway cho {agent_id} (Live Mode): {e}."
-            registry.add_agent_message(agent_id, "agent", reply, "chat")
+        text_lower = text.lower()
+        if agent_id == "pm-orchestrator" and any(kw in text_lower for kw in ["ghi file", "tạo file", "viết file", "cài đặt", "install", "lodash", "run"]):
+            reply = (
+                "Tôi đã nhận được chỉ thị. Tôi sẽ tự động gọi các công cụ vật lý XML để tạo tài liệu dự án và cài đặt môi trường trực tiếp xuống ổ đĩa.\n\n"
+                f"<tool_write_file path=\"active/{registry.current_project}/01-initiation/prd.md\">"
+                f"# PRD - {registry.current_project}\n\n"
+                f"## Giới thiệu\nYêu cầu dự án: {text}\n\n"
+                f"## Tính năng cốt lõi\n- Giao diện Dark mode mượt mà\n- WebSocket real-time connection\n"
+                f"</tool_write_file>\n\n"
+                f"<tool_execute_command>echo \"Installing npm dependency: lodash...\"</tool_execute_command>"
+            )
+        else:
+            mock_responses = {
+                "pm-orchestrator": "Tôi là PM Agent. Tôi chịu trách nhiệm lập kế hoạch dự án, phân rã nhiệm vụ và điều phối toàn bộ Web-Team hoạt động song song.",
+                "product-agent": "Tôi là Product Agent. Tôi chuyên phân tích yêu cầu từ bản mô tả brief của khách hàng để xuất ra tài liệu PRD hoàn chỉnh.",
+                "architecture-agent": "Tôi là Architecture Agent. Tôi chuyên thiết kế cấu trúc thư mục, định nghĩa API contract và sơ đồ dữ liệu cho dự án.",
+                "frontend-agent": "Tôi là Frontend Agent. Tôi tạo ra giao diện người dùng đẹp mắt, responsive và áp dụng các hiệu ứng chuyển động mượt mà.",
+                "backend-agent": "Tôi là Backend Agent. Tôi phụ trách xây dựng cơ sở dữ liệu, viết logic nghiệp vụ xử lý API và tích hợp với Frontend.",
+                "qa-agent": "Tôi là QA Agent. Tôi tự động thiết lập bộ test case, chạy thử nghiệm hệ thống và rà soát lỗi bảo mật trước khi bàn giao dự án."
+            }
+            reply = mock_responses.get(agent_id, f"Tôi là {registry.agents[agent_id].display_name}. Rất vui được nhận tin nhắn từ bạn!")
             
+            if agent_id == "pm-orchestrator":
+                if any(kw in text_lower for kw in ["chốt", "đồng ý", "ok", "duyệt", "tiến hành đi", "bắt đầu đi", "let's go", "approve", "go ahead"]):
+                    reply += "\n\n[SCOPE_APPROVED] Tuyệt vời! Kế hoạch đã được phê duyệt. Tôi sẽ kích hoạt pha thực thi cho dự án ngay lập tức."
+        
+        # ReAct Loop in Mock Mode
+        max_iter = 3
+        current_iter = 0
+        current_text = reply
+        
+        while current_iter < max_iter:
+            if current_iter == 0:
+                registry.add_agent_message(agent_id, "agent", current_text, "chat")
+            
+            tool_output, did_exec = execute_agent_tools(agent_id, current_text)
+            if did_exec:
+                registry.add_agent_message(agent_id, "system", f"🛠️ **[ReAct Tool Output]**:\n\n{tool_output}", "status")
+                current_iter += 1
+                current_text = f"Tôi đã tự động thực thi các hành động vật lý (Ghi file / Chạy lệnh) thành công ở lượt ReAct thứ {current_iter}. Các tệp đã được tạo lập và lưu an toàn tại thư mục dự án `projects/`."
+                registry.add_agent_message(agent_id, "agent", current_text, "chat")
+            else:
+                break
+        reply = current_text
+    else:
+        # LIVE MODE - Real ReAct Loop with Codex
+        max_iter = 3
+        current_iter = 0
+        
+        prompt_path = SUBAGENTS_DIR / f"{agent_id}.md"
+        prompt = prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else "Bạn là một AI Agent trong hệ thống Multi-Agent."
+        system_prompt = prompt + "\n\nHãy phản hồi ngắn gọn bằng tiếng Việt theo đúng vai trò và nhiệm vụ của bạn."
+        
+        user_input = text
+        while current_iter < max_iter:
+            reply = generate_streaming_chat(agent_id, system_prompt, user_input, temperature=0.3)
+            
+            tool_output, did_exec = execute_agent_tools(agent_id, reply)
+            if did_exec:
+                registry.add_agent_message(agent_id, "system", f"🛠️ **[ReAct Tool Output]**:\n\n{tool_output}", "status")
+                user_input = f"Kết quả thực thi công cụ ReAct XML:\n{tool_output}\n\nHãy tiếp tục và đưa ra phản hồi tổng kết cuối cùng cho người dùng."
+                current_iter += 1
+            else:
+                break
+                
     registry.set_agent_state(agent_id, AgentState.IDLE)
     
     # Human-in-the-loop Pipeline release gateway
@@ -1500,8 +1625,13 @@ function renderMessages() {
         
         const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 120;
         
-        msgs.forEach((m, i) => {
-            const msgId = `msg-${activeAgent}-${i}`;
+        // Limit to last 50 messages to free browser memory
+        const displayMsgs = msgs.slice(-50);
+        
+        displayMsgs.forEach((m) => {
+            // Use index from the original msgs array to maintain stable DOM IDs
+            const originalIndex = msgs.indexOf(m);
+            const msgId = `msg-${activeAgent}-${originalIndex}`;
             const cls = m.type === 'error' ? 'error' : m.role;
             const time = m.ts ? new Date(m.ts).toLocaleTimeString() : '';
             
@@ -1538,6 +1668,7 @@ function renderMessages() {
             existingIds.delete(msgId);
         });
         
+        // Cleanup older DOM nodes outside the 50 messages window
         existingIds.forEach(id => {
             const n = document.getElementById(id);
             if (n) n.remove();

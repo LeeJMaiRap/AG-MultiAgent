@@ -260,13 +260,32 @@ class OrchestratorRegistry:
                 "type": msg_type,
                 "stream": True
             })
-        self._notify("message_stream", {
-            "agent_id": agent_id,
-            "role": role,
-            "text": text,
-            "type": msg_type,
-            "ts": datetime.now().isoformat()
-        })
+
+        # Apply WebSocket Throttling
+        now = time.time()
+        if not hasattr(self, "_last_stream_time"):
+            self._last_stream_time = {}
+        if not hasattr(self, "_last_stream_text"):
+            self._last_stream_text = {}
+
+        last_time = self._last_stream_time.get(agent_id, 0.0)
+        last_text = self._last_stream_text.get(agent_id, "")
+        
+        # Only broadcast WebSocket if:
+        # 1. First token (last_time == 0)
+        # 2. OR elapsed time >= 50ms (0.05 seconds)
+        # 3. OR aggregated text length grew by >= 10 characters
+        if last_time == 0.0 or (now - last_time >= 0.05) or (len(text) - len(last_text) >= 10):
+            self._last_stream_time[agent_id] = now
+            self._last_stream_text[agent_id] = text
+            
+            self._notify("message_stream", {
+                "agent_id": agent_id,
+                "role": role,
+                "text": text,
+                "type": msg_type,
+                "ts": datetime.now().isoformat()
+            })
 
     def finalize_stream_message(self, agent_id: str):
         if agent_id not in self.agents:
@@ -274,6 +293,21 @@ class OrchestratorRegistry:
         agent = self.agents[agent_id]
         if agent.messages and agent.messages[-1].get("stream") is True:
             agent.messages[-1]["stream"] = False
+            # Force notify the absolute final text to guarantee 100% data consistency
+            self._notify("message_stream", {
+                "agent_id": agent_id,
+                "role": agent.messages[-1]["role"],
+                "text": agent.messages[-1]["text"],
+                "type": agent.messages[-1]["type"],
+                "ts": agent.messages[-1]["ts"]
+            })
+
+        # Reset throttling cache for this agent
+        if hasattr(self, "_last_stream_time") and agent_id in self._last_stream_time:
+            self._last_stream_time[agent_id] = 0.0
+        if hasattr(self, "_last_stream_text") and agent_id in self._last_stream_text:
+            self._last_stream_text[agent_id] = ""
+
         self._notify("message_stream_end", {"agent_id": agent_id})
         try:
             self.save_chat_history(self.current_project)
@@ -308,6 +342,8 @@ class OrchestratorRegistry:
 
     def save_chat_history(self, project_name: str):
         import json
+        import copy
+        import threading
         from pathlib import Path
         self.current_project = project_name
         
@@ -322,12 +358,27 @@ class OrchestratorRegistry:
             project_dir = BASE_DIR / "projects" / "active" / project_name
             project_dir.mkdir(parents=True, exist_ok=True)
         
-        # Gom tin nhắn của tất cả agent
-        history = {agent_id: agent.messages for agent_id, agent in self.agents.items()}
+        # Safe copy messages to avoid race conditions with mutating lists in memory
+        try:
+            history = {agent_id: copy.deepcopy(agent.messages) for agent_id, agent in self.agents.items()}
+        except Exception:
+            history = {agent_id: list(agent.messages) for agent_id, agent in self.agents.items()}
         
-        history_file = project_dir / "chat_history.json"
-        with open(history_file, "w", encoding="utf-8") as f:
-            json.dump(history, f, ensure_ascii=False, indent=2)
+        def _write_thread(p_dir, hist_data):
+            try:
+                h_file = p_dir / "chat_history.json"
+                tmp_file = p_dir / "chat_history.json.tmp"
+                with open(tmp_file, "w", encoding="utf-8") as f:
+                    json.dump(hist_data, f, ensure_ascii=False, indent=2)
+                if tmp_file.exists():
+                    if h_file.exists():
+                        h_file.unlink()
+                    tmp_file.rename(h_file)
+            except Exception as e:
+                print(f"[Async Save Error] Failed to write chat_history.json: {e}")
+
+        # Fire and forget thread
+        threading.Thread(target=_write_thread, args=(project_dir, history), daemon=True).start()
 
     def load_chat_history(self, project_name: str) -> bool:
         import json
