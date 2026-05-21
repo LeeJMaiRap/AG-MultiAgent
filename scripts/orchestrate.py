@@ -177,6 +177,37 @@ class OrchestratorRegistry:
         self.agents[agent_id].add_message(role, text, msg_type)
         self._notify("message", {"agent_id": agent_id, "role": role, "text": text, "type": msg_type})
 
+    def stream_agent_message(self, agent_id: str, role: str, text: str, msg_type: str = "info"):
+        if agent_id not in self.agents:
+            return
+        agent = self.agents[agent_id]
+        if agent.messages and agent.messages[-1]["role"] == role and agent.messages[-1].get("stream") is True:
+            agent.messages[-1]["text"] = text
+            agent.messages[-1]["ts"] = datetime.now().isoformat()
+        else:
+            agent.messages.append({
+                "ts": datetime.now().isoformat(),
+                "role": role,
+                "text": text,
+                "type": msg_type,
+                "stream": True
+            })
+        self._notify("message_stream", {
+            "agent_id": agent_id,
+            "role": role,
+            "text": text,
+            "type": msg_type,
+            "ts": datetime.now().isoformat()
+        })
+
+    def finalize_stream_message(self, agent_id: str):
+        if agent_id not in self.agents:
+            return
+        agent = self.agents[agent_id]
+        if agent.messages and agent.messages[-1].get("stream") is True:
+            agent.messages[-1]["stream"] = False
+        self._notify("message_stream_end", {"agent_id": agent_id})
+
     def get_all_states(self) -> List[dict]:
         return [a.to_dict() for a in self.agents.values()]
 
@@ -277,11 +308,11 @@ def _mock_output(agent_name: str, task_desc: str) -> str:
 def _real_output(agent_name, task_desc, prompt, model_name, tools):
     import requests
     import traceback
+    import time
+    
     api_key = os.environ.get("GEMINI_API_KEY") or "sk-4f6baca69c3b82dc-64fo64-dcad0a8b"
     url = "https://codex-khanhnguyen.indevs.in/v1/chat/completions"
     actual_model = "cx/gpt-5.5"
-    
-    print(f"[Codex Custom HTTP DEBUG] Agent: {agent_name} | Target Model: {actual_model} | URL: {url}")
     
     headers = {
         "Content-Type": "application/json",
@@ -298,31 +329,83 @@ def _real_output(agent_name, task_desc, prompt, model_name, tools):
             {"role": "system", "content": prompt},
             {"role": "user", "content": task_desc}
         ],
-        "temperature": 0.2
+        "temperature": 0.2,
+        "stream": True
     }
     
-    try:
-        resp = requests.post(url, json=payload, headers=headers, timeout=300)
-        
-        # Log response status
-        print(f"[Codex Response DEBUG] Status: {resp.status_code}")
-        
-        if resp.status_code != 200:
-            raise RuntimeError(f"HTTP Status {resp.status_code} | Body: {resp.text}")
+    max_retries = 3
+    delay = 2
+    last_exc = None
+    
+    for attempt in range(1, max_retries + 1):
+        print(f"[Codex API] Agent: {agent_name} | Attempt {attempt}/{max_retries} | URL: {url}")
+        try:
+            resp = requests.post(url, json=payload, headers=headers, timeout=300, stream=True)
             
-        res_json = resp.json()
-        return res_json['choices'][0]['message']['content']
-    except Exception as e:
-        print(f"[Codex Custom HTTP ERROR] Model: {actual_model} | Exception Type: {type(e)} | Msg: {e}")
-        traceback.print_exc()
-        
-        err_detail = ""
-        if hasattr(e, "response") and e.response is not None:
-            err_detail += f" | Status: {e.response.status_code} | Response: {e.response.text}"
-        else:
-            err_detail += f" | Detail: {str(e)}"
+            # Check response status code
+            if resp.status_code != 200:
+                err_text = ""
+                for chunk in resp.iter_content(chunk_size=1024, decode_unicode=True):
+                    if chunk:
+                        err_text += chunk
+                        if len(err_text) > 1024:
+                            break
+                if "<!doctype html" in err_text.lower() or "<html" in err_text.lower():
+                    raise RuntimeError(f"HTTP Status {resp.status_code} | Cloudflare WAF Blocked (HTML Response)")
+                raise RuntimeError(f"HTTP Status {resp.status_code} | Body: {err_text[:300]}")
             
-        raise RuntimeError(f"Codex Custom HTTP Error: {e}{err_detail}")
+            # Read chunk-by-chunk stream
+            full_text = ""
+            for line in resp.iter_lines():
+                if line:
+                    decoded_line = line.decode('utf-8').strip()
+                    if decoded_line.startswith("data: "):
+                        data_str = decoded_line[6:]
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            chunk_json = json.loads(data_str)
+                            delta = chunk_json['choices'][0]['delta']
+                            if 'content' in delta:
+                                chunk_content = delta['content']
+                                full_text += chunk_content
+                                # Stream character/words to Web UI in real-time
+                                registry.stream_agent_message(agent_name, "agent", full_text, "output")
+                        except Exception:
+                            pass
+            
+            # Finalize WebSocket stream
+            registry.finalize_stream_message(agent_name)
+            
+            # Output WAF Guard verification
+            full_text_lower = full_text.lower()
+            if "<!doctype html" in full_text_lower or "<html" in full_text_lower:
+                raise ValueError("Invalid agent output: Detected HTML block in raw text stream response.")
+                
+            if not full_text.strip():
+                raise ValueError("Empty response received from Codex Gateway.")
+                
+            return full_text
+            
+        except Exception as e:
+            last_exc = e
+            print(f"[Codex Custom HTTP ERROR] Agent: {agent_name} | Attempt {attempt} failed: {e}")
+            traceback.print_exc()
+            
+            # Finalize to clean state on failure
+            registry.finalize_stream_message(agent_name)
+            
+            if attempt < max_retries:
+                print(f"[Codex API] Waiting {delay} seconds before retrying...")
+                time.sleep(delay)
+                delay *= 2
+            else:
+                err_detail = ""
+                if hasattr(e, "response") and e.response is not None:
+                    err_detail += f" | Status: {e.response.status_code} | Response: {e.response.text[:200]}"
+                else:
+                    err_detail += f" | Detail: {str(e)}"
+                raise RuntimeError(f"Codex Custom HTTP Error (After {max_retries} retries): {e}{err_detail}")
 
 
 def _output_file_for(agent_name: str) -> Optional[str]:
@@ -337,11 +420,75 @@ def _output_file_for(agent_name: str) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
-# Full Orchestration Pipeline
+# Full Orchestration Pipeline with PM Fallback
 # ---------------------------------------------------------------------------
 
+def run_agent_with_fallback(agent_name: str, task_desc: str, mock: bool = True, context: str = "") -> dict:
+    """Run an individual agent and fallback to PM recovery or Mock if it crashes."""
+    try:
+        res = run_agent(agent_name, task_desc, mock=mock)
+        if res.get("status") == "success" and res.get("content"):
+            return res
+        raise RuntimeError(res.get("content") or "Agent task execution returned failure status.")
+    except Exception as e:
+        print(f"[Pipeline Recovery] Agent {agent_name} failed: {e}. Activating PM Fallback strategy...")
+        
+        # Stream warning log to PM
+        registry.add_agent_message(
+            "pm-orchestrator", "system",
+            f"CẢNH BÁO HỆ THỐNG: Phân hệ {agent_name} bị sập do lỗi: {e}. Đang kích hoạt kịch bản dự phòng PM Fallback...",
+            "error"
+        )
+        
+        fallback_prompt = (
+            f"Là PM Orchestrator điều phối MTA, phân hệ con '{agent_name}' của bạn vừa gặp sự cố kết nối hoặc lỗi phân tích ({e}).\n"
+            f"Nhiệm vụ của bạn là hãy tự tay biên soạn một tài liệu kỹ thuật / tệp code thay thế tối giản nhưng hợp lệ và đúng định dạng kỹ thuật.\n"
+            f"Hãy tập trung xử lý cho vai trò của {agent_name}.\n"
+            f"Bối cảnh dự án hiện tại:\n{context}\n\n"
+            f"Hãy viết phản hồi hoàn toàn bằng Tiếng Việt hoặc tiếng Anh kỹ thuật thích hợp, sạch sẽ và KHÔNG chứa các thẻ HTML lỗi."
+        )
+        
+        try:
+            # Call PM Orchestrator to generate replacement document
+            fallback_res = run_agent("pm-orchestrator", fallback_prompt, mock=mock)
+            if fallback_res.get("status") == "success" and fallback_res.get("content"):
+                fallback_res["output_file"] = _output_file_for(agent_name)
+                # Log recovery status
+                registry.add_agent_message(
+                    agent_name, "system",
+                    f"KỊCH BẢN DỰ PHÒNG HOÀN TẤT: PM Agent đã sinh thành công tài liệu thay thế cho {agent_name}.",
+                    "status"
+                )
+                # Keep state as DONE for the failed agent so pipeline moves on
+                registry.set_agent_state(agent_name, AgentState.DONE)
+                return fallback_res
+            raise RuntimeError("PM Fallback execution failed.")
+        except Exception as fe:
+            print(f"[Pipeline Critical] PM Fallback also failed: {fe}. Activating ultimate mock fallback...")
+            registry.add_agent_message(
+                "pm-orchestrator", "system",
+                f"LỖI KHẨN CẤP: Kịch bản PM Fallback cũng thất bại. Đang áp dụng tài liệu cứu sinh Mock sạch...",
+                "error"
+            )
+            
+            # Absolute mock fallback to save the pipeline execution
+            mock_content = _mock_output(agent_name, task_desc)
+            mock_res = {
+                "status": "success",
+                "output_file": _output_file_for(agent_name),
+                "content": mock_content
+            }
+            registry.add_agent_message(
+                agent_name, "agent",
+                f"[Ultimate Fallback Output]\n{mock_content[:300]}...\n(Đã tự động phục hồi thành công từ kho lưu trữ Mock)",
+                "output"
+            )
+            registry.set_agent_state(agent_name, AgentState.DONE)
+            return mock_res
+
+
 def run_pipeline(brief: str, project_name: str = "my-new-project", mock: bool = True) -> dict:
-    """Execute the full multi-agent pipeline with state tracking."""
+    """Execute the full multi-agent pipeline with state tracking and robust fallbacks."""
     project_dir = PROJECTS_DIR / project_name
     for sub in ["01-initiation", "02-planning", "03-execution", "04-monitoring", "05-closure"]:
         (project_dir / sub).mkdir(parents=True, exist_ok=True)
@@ -353,27 +500,36 @@ def run_pipeline(brief: str, project_name: str = "my-new-project", mock: bool = 
     registry.add_agent_message("pm-orchestrator", "system", f"Received project brief: {brief}", "info")
 
     # Wave 1 - Sequential
-    res_prod = run_agent("product-agent", brief, mock=mock)
+    # Context 1: Product Agent gets user brief
+    res_prod = run_agent_with_fallback("product-agent", brief, mock=mock, context=f"User Brief: {brief}")
     _write_output(project_dir, res_prod)
 
-    res_arch = run_agent("architecture-agent",
-                         f"PRD:\n{res_prod['content']}", mock=mock)
+    # Context 2: Architecture Agent gets User Brief + PRD
+    arch_ctx = f"PRD:\n{res_prod['content']}"
+    res_arch = run_agent_with_fallback("architecture-agent", arch_ctx, mock=mock, context=f"Brief: {brief}\n\nPRD:\n{res_prod['content']}")
     _write_output(project_dir, res_arch)
 
     # Wave 2 - Parallel (Frontend + Backend)
     registry.add_agent_message("pm-orchestrator", "system", "Wave 2: Launching FE + BE in parallel", "info")
+    
+    # Context 3: FE & BE get User Brief + PRD + Spec
+    wave2_ctx = f"PRD: {res_prod['content']}\nSpec: {res_arch['content']}"
+    fe_be_context = f"Brief: {brief}\n\nPRD:\n{res_prod['content']}\n\nSystem spec:\n{res_arch['content']}"
+    
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-        ctx = f"PRD: {res_prod['content']}\nSpec: {res_arch['content']}"
-        fe_fut = pool.submit(run_agent, "frontend-agent", ctx, mock)
-        be_fut = pool.submit(run_agent, "backend-agent", ctx, mock)
+        fe_fut = pool.submit(run_agent_with_fallback, "frontend-agent", wave2_ctx, mock, fe_be_context)
+        be_fut = pool.submit(run_agent_with_fallback, "backend-agent", wave2_ctx, mock, fe_be_context)
         res_fe = fe_fut.result()
         res_be = be_fut.result()
+        
     _write_output(project_dir, res_fe)
     _write_output(project_dir, res_be)
 
     # Wave 3 - QA
-    qa_ctx = f"PRD: {res_prod['content']}\nFE: {res_fe['content']}\nBE: {res_be['content']}"
-    res_qa = run_agent("qa-agent", qa_ctx, mock=mock)
+    # Context 4: QA gets User Brief + PRD + FE + BE
+    qa_task = f"PRD: {res_prod['content']}\nFE: {res_fe['content']}\nBE: {res_be['content']}"
+    qa_context = f"Brief: {brief}\n\nPRD:\n{res_prod['content']}\n\nFrontend view:\n{res_fe['content']}\n\nBackend logic:\n{res_be['content']}"
+    res_qa = run_agent_with_fallback("qa-agent", qa_task, mock=mock, context=qa_context)
     _write_output(project_dir, res_qa)
 
     # PM Closure
@@ -384,8 +540,9 @@ def run_pipeline(brief: str, project_name: str = "my-new-project", mock: bool = 
         tools_registry.generate_daily_report,
     ]
     pm_ctx = f"Project: {project_name}\nBrief: {brief}\nQA: {res_qa['content']}"
-    res_pm = run_agent("pm-orchestrator", pm_ctx, mock=mock,
-                       model_name="cx/gpt-5.5")
+    pm_fallback_context = f"Brief: {brief}\n\nPRD:\n{res_prod['content']}\n\nSpec:\n{res_arch['content']}\n\nFE:\n{res_fe['content']}\n\nBE:\n{res_be['content']}\n\nQA:\n{res_qa['content']}"
+    
+    res_pm = run_agent_with_fallback("pm-orchestrator", pm_ctx, mock=mock, context=pm_fallback_context)
 
     summary = res_pm["content"] if not mock else (
         f"# PM Project Summary\n\n- Project: {project_name}\n- Status: Completed\n"

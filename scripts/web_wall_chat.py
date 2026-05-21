@@ -133,6 +133,103 @@ async def start_pipeline(body: dict):
 # ---------------------------------------------------------------------------
 # Asynchronous Chat Processing & Gemini API Handlers
 # ---------------------------------------------------------------------------
+def generate_streaming_chat(agent_id: str, system_prompt: str, user_text: str, temperature: float = 0.3) -> str:
+    import requests
+    import json
+    import time
+    import traceback
+    
+    api_key = os.environ.get("GEMINI_API_KEY") or "sk-4f6baca69c3b82dc-64fo64-dcad0a8b"
+    url = "https://codex-khanhnguyen.indevs.in/v1/chat/completions"
+    actual_model = "cx/gpt-5.5"
+    
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Authorization": f"Bearer {api_key}",
+        "api-key": api_key,
+        "X-API-Key": api_key,
+        "api_key": api_key
+    }
+    
+    payload = {
+        "model": actual_model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_text}
+        ],
+        "temperature": temperature,
+        "stream": True
+    }
+    
+    max_retries = 3
+    delay = 2
+    last_exc = None
+    
+    for attempt in range(1, max_retries + 1):
+        print(f"[Codex Chat Stream] Agent: {agent_id} | Attempt {attempt}/{max_retries} | URL: {url}")
+        try:
+            resp = requests.post(url, json=payload, headers=headers, timeout=300, stream=True)
+            
+            if resp.status_code != 200:
+                err_text = ""
+                for chunk in resp.iter_content(chunk_size=1024, decode_unicode=True):
+                    if chunk:
+                        err_text += chunk
+                        if len(err_text) > 1024:
+                            break
+                if "<!doctype html" in err_text.lower() or "<html" in err_text.lower():
+                    raise RuntimeError(f"HTTP Status {resp.status_code} | WAF Blocked (HTML)")
+                raise RuntimeError(f"HTTP Status {resp.status_code} | Body: {err_text[:300]}")
+            
+            full_text = ""
+            for line in resp.iter_lines():
+                if line:
+                    decoded_line = line.decode('utf-8').strip()
+                    if decoded_line.startswith("data: "):
+                        data_str = decoded_line[6:]
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            chunk_json = json.loads(data_str)
+                            delta = chunk_json['choices'][0]['delta']
+                            if 'content' in delta:
+                                chunk_content = delta['content']
+                                full_text += chunk_content
+                                # Stream character/words to Web UI in real-time
+                                registry.stream_agent_message(agent_id, "agent", full_text, "chat")
+                        except Exception:
+                            pass
+            
+            registry.finalize_stream_message(agent_id)
+            
+            # Output WAF Guard verification
+            full_text_lower = full_text.lower()
+            if "<!doctype html" in full_text_lower or "<html" in full_text_lower:
+                raise ValueError("Detected HTML WAF block in stream response.")
+                
+            return full_text
+            
+        except Exception as e:
+            last_exc = e
+            print(f"[Codex Chat ERROR] Agent: {agent_id} | Attempt {attempt} failed: {e}")
+            traceback.print_exc()
+            
+            registry.finalize_stream_message(agent_id)
+            
+            if attempt < max_retries:
+                print(f"[Codex Chat] Waiting {delay} seconds before retrying...")
+                time.sleep(delay)
+                delay *= 2
+            else:
+                err_detail = ""
+                if hasattr(e, "response") and e.response is not None:
+                    err_detail += f" | Status: {e.response.status_code} | Response: {e.response.text[:200]}"
+                else:
+                    err_detail += f" | Detail: {str(e)}"
+                raise RuntimeError(f"Codex Connection Failed: {e}{err_detail}")
+
+
 def process_chat(agent_id: str, text: str):
     global GLOBAL_MOCK
     
@@ -170,55 +267,14 @@ def process_chat(agent_id: str, text: str):
         if GLOBAL_MOCK:
             time.sleep(0.8)
             reply = "Chào bạn! Tôi là Agent Chính (AG2.0). Rất vui được hỗ trợ bạn. Các Agent con đang ở trạng thái NGHỈ (Idle) để tiết kiệm token. Bạn có thể trò chuyện với tôi hoặc gửi một yêu cầu dự án (chứa các từ khóa như 'dự án', 'xây dựng', 'MVP', v.v.) để kích hoạt toàn bộ Web-Team hoạt động nhé!"
+            registry.add_agent_message("main-agent", "agent", reply, "chat")
         else:
             try:
-                import requests
-                import traceback
-                api_key = os.environ.get("GEMINI_API_KEY") or "sk-4f6baca69c3b82dc-64fo64-dcad0a8b"
-                url = "https://codex-khanhnguyen.indevs.in/v1/chat/completions"
-                actual_model = "cx/gpt-5.5"
-                
-                print(f"[Codex Custom HTTP DEBUG] Agent: main-agent | Model: {actual_model} | URL: {url}")
-                
-                headers = {
-                    "Content-Type": "application/json",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    "Authorization": f"Bearer {api_key}",
-                    "api-key": api_key,
-                    "X-API-Key": api_key,
-                    "api_key": api_key
-                }
                 system_prompt = "Bạn là Agent Chính (AG2.0), trợ lý AI điều phối chính của hệ thống MTA. Hãy trò chuyện thân thiện, chuyên nghiệp hoàn toàn bằng tiếng Việt. Nếu người dùng đưa ra yêu cầu dự án, hãy khuyên họ nhập chi tiết để bạn chuyển tiếp cho PM Agent."
-                
-                payload = {
-                    "model": actual_model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": text}
-                    ],
-                    "temperature": 0.4
-                }
-                
-                resp = requests.post(url, json=payload, headers=headers, timeout=300)
-                print(f"[Codex Response DEBUG] main-agent | Status: {resp.status_code}")
-                
-                if resp.status_code != 200:
-                    raise RuntimeError(f"HTTP Status {resp.status_code} | Body: {resp.text}")
-                    
-                res_json = resp.json()
-                reply = res_json['choices'][0]['message']['content']
+                generate_streaming_chat("main-agent", system_prompt, text, temperature=0.4)
             except Exception as e:
-                print(f"[Codex Custom HTTP ERROR] main-agent | Exception Type: {type(e)} | Msg: {e}")
-                traceback.print_exc()
-                
-                err_detail = ""
-                if hasattr(e, "response") and e.response is not None:
-                    err_detail += f" | Status: {e.response.status_code} | Response Text: {e.response.text}"
-                else:
-                    err_detail += f" | Detail: {str(e)}"
-                    
-                reply = f"Lỗi kết nối Codex Gateway (Live Mode): {e}{err_detail}. Hãy kiểm tra GEMINI_API_KEY hoặc thử lại với Mock Mode."
-        registry.add_agent_message("main-agent", "agent", reply, "chat")
+                reply = f"Lỗi kết nối Codex Gateway (Live Mode): {e}. Hãy kiểm tra GEMINI_API_KEY hoặc thử lại với Mock Mode."
+                registry.add_agent_message("main-agent", "agent", reply, "chat")
         registry.set_agent_state("main-agent", AgentState.IDLE)
         return
 
@@ -236,58 +292,18 @@ def process_chat(agent_id: str, text: str):
             "qa-agent": "Tôi là QA Agent. Tôi tự động thiết lập bộ test case, chạy thử nghiệm hệ thống và rà soát lỗi bảo mật trước khi bàn giao dự án."
         }
         reply = mock_responses.get(agent_id, f"Tôi là {registry.agents[agent_id].display_name}. Rất vui được nhận tin nhắn từ bạn!")
+        registry.add_agent_message(agent_id, "agent", reply, "chat")
     else:
         try:
             # Get agent system prompt
             prompt_path = SUBAGENTS_DIR / f"{agent_id}.md"
             prompt = prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else "Bạn là một AI Agent trong hệ thống Multi-Agent."
-            import requests
-            import traceback
-            api_key = os.environ.get("GEMINI_API_KEY") or "sk-4f6baca69c3b82dc-64fo64-dcad0a8b"
-            url = "https://codex-khanhnguyen.indevs.in/v1/chat/completions"
-            actual_model = "cx/gpt-5.5"
-            
-            print(f"[Codex Custom HTTP DEBUG] Agent: {agent_id} | Model: {actual_model} | URL: {url}")
-            
-            headers = {
-                "Content-Type": "application/json",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Authorization": f"Bearer {api_key}",
-                "api-key": api_key,
-                "X-API-Key": api_key,
-                "api_key": api_key
-            }
-            
-            payload = {
-                "model": actual_model,
-                "messages": [
-                    {"role": "system", "content": prompt},
-                    {"role": "user", "content": text + "\n\nHãy phản hồi ngắn gọn bằng tiếng Việt theo đúng vai trò và nhiệm vụ của bạn."}
-                ],
-                "temperature": 0.3
-            }
-            
-            resp = requests.post(url, json=payload, headers=headers, timeout=300)
-            print(f"[Codex Response DEBUG] {agent_id} | Status: {resp.status_code}")
-            
-            if resp.status_code != 200:
-                raise RuntimeError(f"HTTP Status {resp.status_code} | Body: {resp.text}")
-                
-            res_json = resp.json()
-            reply = res_json['choices'][0]['message']['content']
+            system_prompt = prompt + "\n\nHãy phản hồi ngắn gọn bằng tiếng Việt theo đúng vai trò và nhiệm vụ của bạn."
+            generate_streaming_chat(agent_id, system_prompt, text, temperature=0.3)
         except Exception as e:
-            print(f"[Codex Gateway ERROR DEBUG] {agent_id} | Exception Type: {type(e)} | Msg: {e}")
-            traceback.print_exc()
+            reply = f"Lỗi kết nối Codex Gateway cho {agent_id} (Live Mode): {e}."
+            registry.add_agent_message(agent_id, "agent", reply, "chat")
             
-            err_detail = ""
-            if hasattr(e, "response") and e.response is not None:
-                err_detail += f" | Status: {e.response.status_code} | Response Text: {e.response.text}"
-            else:
-                err_detail += f" | Detail: {str(e)}"
-                
-            reply = f"Lỗi kết nối Codex Gateway cho {agent_id} (Live Mode): {e}{err_detail}."
-            
-    registry.add_agent_message(agent_id, "agent", reply, "chat")
     registry.set_agent_state(agent_id, AgentState.IDLE)
 
 def process_chat_in_thread(agent_id: str, text: str):
@@ -712,6 +728,38 @@ function handleEvent(msg) {
         if (tab && activeAgent !== id) {
             tab.style.background = 'rgba(108,99,255,0.15)';
             setTimeout(() => { tab.style.background = ''; }, 1500);
+        }
+    }
+    else if (msg.event === 'message_stream') {
+        const id = msg.agent_id;
+        if (!agentMessages[id]) agentMessages[id] = [];
+        const lastMsg = agentMessages[id][agentMessages[id].length - 1];
+        if (lastMsg && lastMsg.role === msg.role && lastMsg.stream === true) {
+            // Update existing stream bubble in-place (typing effect)
+            lastMsg.text = msg.text;
+            lastMsg.ts = msg.ts;
+        } else {
+            // Start a new stream bubble
+            agentMessages[id].push({ ts: msg.ts, role: msg.role, text: msg.text, type: msg.type, stream: true });
+        }
+        if (activeAgent === id) renderMessages();
+        // Subtle flash on tab if not active
+        const streamTab = document.querySelector(`[data-agent="${id}"]`);
+        if (streamTab && activeAgent !== id) {
+            streamTab.style.borderLeftColor = 'var(--blue)';
+        }
+    }
+    else if (msg.event === 'message_stream_end') {
+        const id = msg.agent_id;
+        if (agentMessages[id] && agentMessages[id].length > 0) {
+            const last = agentMessages[id][agentMessages[id].length - 1];
+            if (last.stream === true) last.stream = false;
+        }
+        if (activeAgent === id) renderMessages();
+        // Reset tab flash
+        const streamTabEnd = document.querySelector(`[data-agent="${id}"]`);
+        if (streamTabEnd && activeAgent !== id) {
+            streamTabEnd.style.borderLeftColor = '';
         }
     }
     else if (msg.event === 'idle_all') {
