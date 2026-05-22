@@ -42,7 +42,7 @@ app = FastAPI(title="Antigravity 2.0 Agent Wall Chat")
 registry = OrchestratorRegistry()
 registry.active_assistant_session_id = ""  # Dynamic assistant session tracker
 PORT = int(os.environ.get("WALL_CHAT_PORT", 20130))
-GLOBAL_MOCK = True
+GLOBAL_MOCK = os.environ.get("GLOBAL_MOCK", "False").lower() in ("true", "1", "yes")
 BASE_DIR = Path(__file__).parent.parent.resolve()
 SUBAGENTS_DIR = BASE_DIR / "subagents"
 import time
@@ -912,6 +912,29 @@ def execute_agent_tools(agent_id: str, text: str) -> tuple[str, bool]:
 def process_chat(agent_id: str, text: str, assistant_session_id: str = None):
     global GLOBAL_MOCK
     
+    # 0. Intercept slash command /model
+    if text.strip().startswith("/model"):
+        model_name = os.environ.get("MODEL_NAME") or "cx/gpt-5.5"
+        status_msg = (
+            f"⚙️ **[System Model Information]**\n\n"
+            f"- **Model Đang Dùng:** `{model_name}`\n"
+            f"- **Trạng Thái Kết Nối:** `Active` (Live Gateway)\n"
+            f"- **Quyền Hạn:** `Full Access`"
+        )
+        registry.add_agent_message(agent_id, "system", status_msg, "chat", assistant_session_id=assistant_session_id)
+        if assistant_session_id:
+            chats = load_assistant_chats()
+            session = next((s for s in chats.get("sessions", []) if s["id"] == assistant_session_id), None)
+            if session:
+                session["messages"].append({
+                    "ts": datetime.now().isoformat(),
+                    "role": "system",
+                    "text": status_msg,
+                    "type": "chat"
+                })
+                save_assistant_chats(chats)
+        return
+
     # 1. Enforce permission barrier
     if not check_permission(agent_id, text):
         registry.add_agent_message(
@@ -1055,7 +1078,9 @@ def process_chat(agent_id: str, text: str, assistant_session_id: str = None):
                 f"{project_ctx}"
             )
         else:
+            current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             system_prompt = (
+                f"[Current Server Time: {current_time_str}]\n"
                 "Bạn là LeeJ CEO, trợ lý AI thông minh và thân thiện. "
                 "Bạn đang ở chế độ AI ASSISTANT: trò chuyện tự do, không can thiệp pipeline, không chuyển câu hỏi sang PM Agent. "
                 "Hãy trò chuyện bằng Tiếng Việt, hỗ trợ người dùng với mọi câu hỏi chung về lập trình, công nghệ, hoặc cuộc sống."
